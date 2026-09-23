@@ -14,4 +14,12 @@ export interface AppConfig {
     readonly defaultModel: string;
     readonly defaultThinkingLevel: ThinkingLevel;
   };
+  readonly orchestrator: {
+    readonly apiUrl: string | undefined;
+    readonly apiToken: string | undefined;
+  };
+  readonly events: {
+    readonly batchSize: number;
+    readonly flushIntervalMs: number;
+  };
 }

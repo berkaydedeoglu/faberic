@@ -142,6 +142,8 @@ from `agent/agents/base`. Configuration is read through `ConfigService`
 | `PI_DEFAULT_PROVIDER`       | `anthropic`                    | Provider used when none is given                     |
 | `PI_DEFAULT_MODEL`          | `claude-sonnet-4-5`            | Model used when none is given                        |
 | `PI_DEFAULT_THINKING_LEVEL` | `medium`                       | Thinking level used when none is given               |
+| `ORCHESTRATOR_API_URL`      | —                              | Endpoint that receives agent events (POST)           |
+| `ORCHESTRATOR_API_TOKEN`    | —                              | Bearer token for the orchestrator API                |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ... | —               | Credentials for the providers you use; logins made with the pi CLI (in `PI_AUTH_PATH`) also count |
 
 ### Startup checks
@@ -167,7 +169,10 @@ src/
   services/session/
     session-manager.service.ts    owns the single, process-wide active session
     session.service.ts            pi SDK operations on the active session
+  services/event/
+    event-manager.service.ts      observer: queues events and sends them in batches
   utils/clients/pi/client.ts      the only module that imports the pi SDK
+  utils/clients/orchestrator/     POSTs event batches to the orchestrator API
   utils/errors/                   domain errors (mapped to HTTP status / CLI exit codes)
   utils/validation.ts             input validators used by the controller
   utils/env.ts                    environment variable readers
@@ -199,6 +204,17 @@ HTTP request ┘
   `utils/clients/<name>/`.
 - **Message roles** are passed through from the SDK unchanged (`user`, `assistant`,
   `toolResult`, `bashExecution`, `compactionSummary`, ...).
+- **Events (observer pattern).** `EventManager` is the observer: it implements `EventObserver`
+  (`update(event)`) and queues each `AgentEvent` (`type`, `time`, `description`). Services will act
+  as the observables and call `update`; none do yet. A batch is sent as
+  soon as 50 events are queued, or 10 seconds after the first queued event, whichever comes first.
+  Batches are sent one at a time, so order is preserved. A failed batch goes back to the front of
+  the queue and is retried on the next interval. `stop()` sends whatever is left.
+  The orchestrator receives `POST <ORCHESTRATOR_API_URL>` with `Authorization: Bearer <token>` and
+  body `{ "events": [...] }`. The manager is created at startup and stopped on
+  every exit (end of a one-shot command, `exit` in the REPL, SIGINT/SIGTERM while serving), so
+  queued events are sent before the process ends; if they cannot be, a warning is printed. No
+  service calls `update` yet, so nothing is sent today.
 - **Credentials are checked before the provider is called.** Prompting, following up, or switching
   to a provider without credentials fails fast with `MissingCredentialsError` instead of an opaque
   SDK error.

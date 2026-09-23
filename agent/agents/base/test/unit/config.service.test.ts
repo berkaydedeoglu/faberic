@@ -31,6 +31,17 @@ describe("ConfigService.load", () => {
     expect(config.pi.defaultThinkingLevel).toBe("high");
   });
 
+  it("reads the orchestrator API from env and leaves it unset otherwise", () => {
+    expect(ConfigService.load({}).orchestrator).toEqual({ apiUrl: undefined, apiToken: undefined });
+    expect(
+      ConfigService.load({ ORCHESTRATOR_API_URL: "https://orchestrator/events", ORCHESTRATOR_API_TOKEN: "t" }).orchestrator,
+    ).toEqual({ apiUrl: "https://orchestrator/events", apiToken: "t" });
+  });
+
+  it("batches events by 50 or every 10 seconds", () => {
+    expect(ConfigService.load({}).events).toEqual({ batchSize: 50, flushIntervalMs: 10_000 });
+  });
+
   it("throws on an invalid port", () => {
     expect(() => ConfigService.load({ PORT: "not-a-number" })).toThrow();
   });

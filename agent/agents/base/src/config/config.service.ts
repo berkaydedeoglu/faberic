@@ -31,6 +31,14 @@ export class ConfigService {
         defaultModel: readString(env, "PI_DEFAULT_MODEL", "claude-sonnet-4-5"),
         defaultThinkingLevel: readEnum(env, "PI_DEFAULT_THINKING_LEVEL", THINKING_LEVELS, "medium"),
       },
+      orchestrator: {
+        apiUrl: readOptionalString(env, "ORCHESTRATOR_API_URL"),
+        apiToken: readOptionalString(env, "ORCHESTRATOR_API_TOKEN"),
+      },
+      events: {
+        batchSize: 50,
+        flushIntervalMs: 10_000,
+      },
     };
   }
 }
