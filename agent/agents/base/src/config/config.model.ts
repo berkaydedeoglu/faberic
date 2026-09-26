@@ -1,9 +1,12 @@
-import type { ThinkingLevel } from "../models/index.ts";
+import type { LogLevel, ThinkingLevel } from "../models/index.ts";
 
 export interface AppConfig {
   readonly server: {
     readonly port: number;
     readonly host: string;
+  };
+  readonly workspace: {
+    readonly dir: string;
   };
   readonly pi: {
     readonly agentDir: string;
@@ -21,5 +24,17 @@ export interface AppConfig {
   readonly events: {
     readonly batchSize: number;
     readonly flushIntervalMs: number;
+  };
+  readonly environment: {
+    readonly cloneConcurrency: number;
+  };
+  readonly logging: {
+    readonly consoleLevel: LogLevel;
+    readonly fileLevel: LogLevel;
+    readonly file: string;
+  };
+  readonly monitoring: {
+    readonly errorLogChars: number;
+    readonly errorLogScanBytes: number;
   };
 }

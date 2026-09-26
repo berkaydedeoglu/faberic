@@ -1,5 +1,5 @@
 import { singleton } from "tsyringe";
-import { THINKING_LEVELS } from "../models/index.ts";
+import { LOG_LEVELS, THINKING_LEVELS } from "../models/index.ts";
 import { type Env, readEnum, readInt, readOptionalString, readString } from "../utils/env.ts";
 import type { AppConfig } from "./config.model.ts";
 
@@ -22,6 +22,10 @@ export class ConfigService {
         port: readInt(env, "PORT", 6565),
         host: readString(env, "HOST", "0.0.0.0"),
       },
+      workspace: {
+        // Fixed on purpose: every session of this agent runs here, and nothing outside can move it.
+        dir: `${env.HOME ?? "/tmp"}/.faberic/workspace`,
+      },
       pi: {
         agentDir: readString(env, "PI_AGENT_DIR", piHome),
         authPath: readString(env, "PI_AUTH_PATH", `${piHome}/auth.json`),
@@ -38,6 +42,18 @@ export class ConfigService {
       events: {
         batchSize: 50,
         flushIntervalMs: 10_000,
+      },
+      environment: {
+        cloneConcurrency: 3,
+      },
+      logging: {
+        consoleLevel: readEnum(env, "LOG_CONSOLE_LEVEL", LOG_LEVELS, "info"),
+        fileLevel: readEnum(env, "LOG_FILE_LEVEL", LOG_LEVELS, "error"),
+        file: readString(env, "LOG_FILE", `${env.HOME ?? "/tmp"}/.faberic/logs/agent.log`),
+      },
+      monitoring: {
+        errorLogChars: 600,
+        errorLogScanBytes: 64 * 1024,
       },
     };
   }

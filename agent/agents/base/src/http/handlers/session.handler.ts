@@ -17,6 +17,15 @@ function bodyOf({ body }: WithBody): Record<string, unknown> {
   return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
 }
 
+// The target session always comes from `?sessionId=`; without it the default session is used.
+function targetOf({ query }: WithQuery): { sessionId: string | undefined } {
+  return { sessionId: query.sessionId };
+}
+
+function targetedBodyOf(request: WithBody & WithQuery): Record<string, unknown> {
+  return { ...bodyOf(request), ...targetOf(request) };
+}
+
 @singleton()
 export class SessionHttpHandler {
   constructor(@inject(SessionController) private readonly controller: SessionController) {}
@@ -31,55 +40,63 @@ export class SessionHttpHandler {
     return this.controller.continueSession(bodyOf(request));
   }
 
-  list({ query }: WithQuery) {
-    return this.controller.listSessions({ cwd: query.cwd, all: query.all === "true" });
+  list() {
+    return this.controller.listSessions();
   }
 
-  get() {
-    return this.controller.getSession();
+  listOpen() {
+    return this.controller.listOpenSessions();
   }
 
-  abort() {
-    return this.controller.abortSession();
+  setDefault(request: WithBody) {
+    return this.controller.setDefaultSession(bodyOf(request));
   }
 
-  destroy() {
-    return this.controller.destroySession();
+  get(request: WithQuery) {
+    return this.controller.getSession(targetOf(request));
   }
 
-  getModel() {
-    return this.controller.getModel();
+  abort(request: WithQuery) {
+    return this.controller.abortSession(targetOf(request));
   }
 
-  setModel(request: WithBody) {
-    return this.controller.setModel(bodyOf(request));
+  destroy(request: WithQuery) {
+    return this.controller.destroySession(targetOf(request));
+  }
+
+  getModel(request: WithQuery) {
+    return this.controller.getModel(targetOf(request));
+  }
+
+  setModel(request: WithBody & WithQuery) {
+    return this.controller.setModel(targetedBodyOf(request));
   }
 
   listModels({ query }: WithQuery) {
     return this.controller.listAvailableModels({ provider: query.provider });
   }
 
-  getThinkingLevel() {
-    return this.controller.getThinkingLevel();
+  getThinkingLevel(request: WithQuery) {
+    return this.controller.getThinkingLevel(targetOf(request));
   }
 
-  setThinkingLevel(request: WithBody) {
-    return this.controller.setThinkingLevel(bodyOf(request));
+  setThinkingLevel(request: WithBody & WithQuery) {
+    return this.controller.setThinkingLevel(targetedBodyOf(request));
   }
 
-  getStats() {
-    return this.controller.getStats();
+  getStats(request: WithQuery) {
+    return this.controller.getStats(targetOf(request));
   }
 
-  getMessages() {
-    return this.controller.getMessages();
+  getMessages(request: WithQuery) {
+    return this.controller.getMessages(targetOf(request));
   }
 
-  prompt(request: WithBody) {
-    return this.controller.prompt(bodyOf(request));
+  prompt(request: WithBody & WithQuery) {
+    return this.controller.prompt(targetedBodyOf(request));
   }
 
-  followUp(request: WithBody) {
-    return this.controller.followUp(bodyOf(request));
+  followUp(request: WithBody & WithQuery) {
+    return this.controller.followUp(targetedBodyOf(request));
   }
 }

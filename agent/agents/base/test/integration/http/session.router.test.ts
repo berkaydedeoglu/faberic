@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "bun:test";
+import { EnvironmentHttpHandler } from "../../../src/http/handlers/environment.handler.ts";
+import { MonitoringHttpHandler } from "../../../src/http/handlers/monitoring.handler.ts";
 import { SessionHttpHandler } from "../../../src/http/handlers/session.handler.ts";
 import { createApp } from "../../../src/http/server.ts";
+import { createTestLogger } from "../../mocks/logger.mock.ts";
+import { createMockedMonitoringStack } from "../../mocks/monitoring.mock.ts";
+import { createMockedEnvironmentStack } from "../../mocks/environment.mock.ts";
 import { createMockedSessionStack } from "../../mocks/session-sdk.mock.ts";
 
 function request(method: string, path: string, body?: unknown): Request {
@@ -15,7 +20,11 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
   let app: ReturnType<typeof createApp>;
 
   beforeEach(() => {
-    app = createApp(new SessionHttpHandler(createMockedSessionStack().controller));
+    app = createApp({
+      session: new SessionHttpHandler(createMockedSessionStack().controller),
+      environment: new EnvironmentHttpHandler(createMockedEnvironmentStack().controller),
+      monitoring: new MonitoringHttpHandler(createMockedMonitoringStack().controller),
+    }, createTestLogger().logger);
   });
 
   it("GET /session/models works without a session", async () => {
@@ -31,8 +40,18 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
 
     expect((await app.handle(request("POST", "/session", { provider: "  " }))).status).toBe(400);
 
-    await app.handle(request("POST", "/session", {}));
-    expect((await app.handle(request("POST", "/session", {}))).status).toBe(409);
+  });
+
+  it("keeps several sessions open and serves the first one by default", async () => {
+    const first = (await (await app.handle(request("POST", "/session", {}))).json()) as { id: string };
+    const second = (await (await app.handle(request("POST", "/session", {}))).json()) as { id: string };
+
+    const open = (await (await app.handle(request("GET", "/session/open"))).json()) as { id: string }[];
+    expect(open.map((session) => session.id)).toEqual([first.id, second.id]);
+    expect(((await (await app.handle(request("GET", "/session"))).json()) as { id: string }).id).toBe(first.id);
+
+    expect(await (await app.handle(request("DELETE", "/session"))).json()).toEqual({ id: first.id, status: "disposed" });
+    expect(((await (await app.handle(request("GET", "/session"))).json()) as { id: string }).id).toBe(second.id);
   });
 
   it("returns 503 when the session's provider has no credentials", async () => {
@@ -76,7 +95,7 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
     expect((await app.handle(request("POST", "/session/abort"))).status).toBe(200);
 
     const destroyed = await app.handle(request("DELETE", "/session"));
-    expect(await destroyed.json()).toEqual({ status: "disposed" });
+    expect(await destroyed.json()).toEqual({ id: expect.any(String), status: "disposed" });
     expect((await app.handle(request("GET", "/session"))).status).toBe(404);
   });
 
@@ -89,8 +108,6 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
     expect(listed.status).toBe(200);
     const sessions = (await listed.json()) as { id: string; messageCount: number; firstMessage: string }[];
     expect(sessions).toEqual([expect.objectContaining({ id: created.id, messageCount: 2, firstMessage: "remember me" })]);
-    expect(await (await app.handle(request("GET", "/session/list?cwd=/elsewhere"))).json()).toEqual([]);
-    expect(await (await app.handle(request("GET", "/session/list?all=true"))).json()).toHaveLength(1);
 
     const continued = await app.handle(request("POST", "/session/continue", { sessionId: created.id }));
     expect(continued.status).toBe(200);
@@ -109,7 +126,30 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
     await app.handle(request("POST", "/session/prompt", { text: "hi" }));
     await app.handle(request("DELETE", "/session"));
     await app.handle(request("POST", "/session", {}));
-    expect((await app.handle(request("POST", "/session/continue", { sessionId: stored.id }))).status).toBe(409);
-    expect((await app.handle(request("POST", "/session/continue", { sessionId: stored.id, force: true }))).status).toBe(200);
+    expect((await app.handle(request("POST", "/session/continue", { sessionId: stored.id }))).status).toBe(200);
+    expect(await (await app.handle(request("GET", "/session/open"))).json()).toHaveLength(2);
+  });
+
+  it("targets sessions with ?sessionId= and switches the default with PUT /session/default", async () => {
+    const first = (await (await app.handle(request("POST", "/session", {}))).json()) as { id: string };
+    const second = (await (await app.handle(request("POST", "/session", {}))).json()) as { id: string };
+
+    const prompted = await app.handle(request("POST", `/session/prompt?sessionId=${second.id}`, { text: "hi" }));
+    expect(((await prompted.json()) as { stats: { sessionId: string } }).stats.sessionId).toBe(second.id);
+    expect(await (await app.handle(request("GET", "/session/messages"))).json()).toEqual([]);
+
+    const changed = await app.handle(request("PUT", "/session/default", { sessionId: second.id }));
+    expect(changed.status).toBe(200);
+    expect(await changed.json()).toMatchObject({ id: second.id, isDefault: true });
+    expect((await (await app.handle(request("GET", "/session/messages"))).json()) as unknown[]).toHaveLength(2);
+
+    const notOpen = await app.handle(request("GET", "/session?sessionId=missing"));
+    expect(notOpen.status).toBe(404);
+    expect(((await notOpen.json()) as { error: string }).error).toBe("SessionNotOpenError");
+    expect((await app.handle(request("PUT", "/session/default", { sessionId: "missing" }))).status).toBe(404);
+    expect((await app.handle(request("PUT", "/session/default", {}))).status).toBe(400);
+
+    await app.handle(request("DELETE", `/session?sessionId=${second.id}`));
+    expect(((await (await app.handle(request("GET", "/session"))).json()) as { id: string }).id).toBe(first.id);
   });
 });

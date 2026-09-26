@@ -21,7 +21,7 @@ describe("SessionHttpHandler", () => {
     const set: { status?: number | string } = {};
     await handler.create({ body: undefined, set });
     expect(set.status).toBe(201);
-    await expect(handler.prompt({ body: "not-json" })).rejects.toThrow(ValidationError);
+    await expect(handler.prompt({ body: "not-json", query: {} })).rejects.toThrow(ValidationError);
   });
 
   it("reads the provider filter from the query string", async () => {
@@ -30,22 +30,37 @@ describe("SessionHttpHandler", () => {
     ]);
   });
 
-  it("reads cwd and the all flag for listing from the query string", async () => {
-    await handler.create({ body: { cwd: "/elsewhere" }, set: {} });
-    await handler.prompt({ body: { text: "hi" } });
-    await handler.destroy();
-
-    expect(await handler.list({ query: {} })).toEqual([]);
-    expect(await handler.list({ query: { cwd: "/elsewhere" } })).toHaveLength(1);
-    expect(await handler.list({ query: { all: "true" } })).toHaveLength(1);
-    expect(await handler.list({ query: { all: "yes" } })).toEqual([]);
+  it("lists stored sessions", async () => {
+    expect(await handler.list()).toEqual([]);
+    await handler.create({ body: {}, set: {} });
+    await handler.prompt({ body: { text: "hi" }, query: {} });
+    await handler.destroy({ query: {} });
+    expect(await handler.list()).toHaveLength(1);
   });
 
   it("continues a session from the request body", async () => {
     const { id } = await handler.create({ body: {}, set: {} });
-    await handler.prompt({ body: { text: "hi" } });
-    await handler.destroy();
+    await handler.prompt({ body: { text: "hi" }, query: {} });
+    await handler.destroy({ query: {} });
     expect((await handler.continue({ body: { sessionId: id } })).id).toBe(id);
     await expect(handler.continue({ body: undefined })).rejects.toThrow(ValidationError);
+  });
+
+  it("targets the session named by ?sessionId= and falls back to the default without it", async () => {
+    const first = await handler.create({ body: {}, set: {} });
+    const second = await handler.create({ body: { provider: "openai", model: "gpt-5" }, set: {} });
+
+    expect((await handler.get({ query: {} })).id).toBe(first.id);
+    expect((await handler.get({ query: { sessionId: "" } })).id).toBe(first.id);
+    expect((await handler.get({ query: { sessionId: second.id } })).id).toBe(second.id);
+
+    const reply = await handler.prompt({ body: { text: "hi", sessionId: first.id }, query: { sessionId: second.id } });
+    expect(reply.messages).toHaveLength(2);
+    expect(await handler.getMessages({ query: { sessionId: second.id } })).toHaveLength(2);
+    expect(await handler.getMessages({ query: {} })).toHaveLength(0);
+
+    expect((await handler.setDefault({ body: { sessionId: second.id } })).isDefault).toBe(true);
+    expect((await handler.getModel({ query: {} })).id).toBe("gpt-5");
+    expect(() => handler.setDefault({ body: {} })).toThrow(ValidationError);
   });
 });

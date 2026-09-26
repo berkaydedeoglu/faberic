@@ -39,7 +39,6 @@ describe("cli format", () => {
   describe("formatSessions", () => {
     const session: StoredSession = {
       id: "abc",
-      cwd: "/repo",
       name: undefined,
       createdAt: 0,
       modifiedAt: Date.UTC(2026, 0, 2, 3, 4, 5),
@@ -48,7 +47,7 @@ describe("cli format", () => {
     };
 
     it("prints one line per session with a collapsed preview", () => {
-      expect(formatSessions([session])).toBe("abc  2026-01-02T03:04:05.000Z  3 msgs  /repo  list the files");
+      expect(formatSessions([session])).toBe("abc  2026-01-02T03:04:05.000Z  3 msgs  list the files");
     });
 
     it("truncates long first messages", () => {

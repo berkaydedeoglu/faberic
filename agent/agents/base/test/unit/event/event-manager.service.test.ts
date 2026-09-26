@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import type { EventManager } from "../../../src/services/event/event-manager.service.ts";
 import { createMockedEventStack, type MockEventSink } from "../../mocks/event-sink.mock.ts";
+import { createTestLogger, type RecordingLogWriter } from "../../mocks/logger.mock.ts";
 
 function updateMany(manager: EventManager, count: number, offset = 0): void {
   for (let i = offset; i < offset + count; i++) {
-    manager.update({ type: "test", time: new Date(), description: `event ${i}` });
+    manager.update({ type: "test", sessionId: "s1", time: new Date(), description: `event ${i}` });
   }
 }
 
@@ -14,20 +15,17 @@ const range = (from: number, to: number) => Array.from({ length: to - from }, (_
 describe("EventManager", () => {
   let sink: MockEventSink;
   let manager: EventManager;
-  let consoleError: ReturnType<typeof spyOn>;
+  let log: RecordingLogWriter;
 
   function setup(events: { batchSize?: number; flushIntervalMs?: number } = {}) {
-    ({ sink, manager } = createMockedEventStack(events));
+    const { writer, logger } = createTestLogger();
+    log = writer;
+    ({ sink, manager } = createMockedEventStack(events, logger));
   }
-
-  beforeEach(() => {
-    consoleError = spyOn(console, "error").mockImplementation(() => {});
-  });
 
   afterEach(async () => {
     sink.failuresLeft = 0;
     await manager.stop();
-    consoleError.mockRestore();
   });
 
   it("uses a batch of 50 and a 10 second window by default", () => {
@@ -104,7 +102,8 @@ describe("EventManager", () => {
     await Bun.sleep(0);
 
     expect(manager.pending).toBe(5);
-    expect(consoleError).toHaveBeenCalledWith("event flush failed, will retry: orchestrator down");
+    expect(log.lines).toHaveLength(1);
+    expect(log.lines[0]).toEndWith(" error: event flush failed, will retry: orchestrator down");
 
     updateMany(manager, 2, 5);
     await Bun.sleep(80);
@@ -119,6 +118,60 @@ describe("EventManager", () => {
 
     await expect(manager.flush()).rejects.toThrow("orchestrator down");
     expect(manager.pending).toBe(2);
+  });
+
+  describe("stats", () => {
+    it("starts at zero", () => {
+      setup();
+      expect(manager.stats()).toEqual({
+        received: 0,
+        receivedByType: {},
+        sent: 0,
+        pending: 0,
+        batchesSent: 0,
+        failedBatches: 0,
+        lastSentAt: null,
+        lastError: null,
+      });
+    });
+
+    it("counts received events by type, sent events, and batches", async () => {
+      setup({ batchSize: 2, flushIntervalMs: 60_000 });
+      manager.update({ type: "agent_start", sessionId: "s1", time: new Date(), description: "a" });
+      manager.update({ type: "agent_end", sessionId: "s1", time: new Date(), description: "b" });
+      manager.update({ type: "agent_start", sessionId: "s1", time: new Date(), description: "c" });
+      await manager.flush();
+
+      const stats = manager.stats();
+      expect(stats).toMatchObject({
+        received: 3,
+        receivedByType: { agent_start: 2, agent_end: 1 },
+        sent: 3,
+        pending: 0,
+        batchesSent: 2,
+        failedBatches: 0,
+        lastError: null,
+      });
+      expect(stats.lastSentAt).toBeInstanceOf(Date);
+    });
+
+    it("records failed batches and the last error", async () => {
+      setup();
+      sink.failuresLeft = 1;
+      updateMany(manager, 2);
+      await expect(manager.flush()).rejects.toThrow();
+
+      const stats = manager.stats();
+      expect(stats).toMatchObject({ received: 2, sent: 0, pending: 2, failedBatches: 1, lastSentAt: null });
+      expect(stats.lastError).toEqual({ message: "orchestrator down", time: expect.any(Date) });
+    });
+
+    it("returns a snapshot the caller cannot change", () => {
+      setup();
+      updateMany(manager, 1);
+      (manager.stats().receivedByType as Record<string, number>).test = 99;
+      expect(manager.stats().receivedByType).toEqual({ test: 1 });
+    });
   });
 
   describe("stop", () => {
@@ -141,7 +194,7 @@ describe("EventManager", () => {
       expect(manager.pending).toBe(3);
 
       await Bun.sleep(50);
-      expect(consoleError).not.toHaveBeenCalled();
+      expect(log.lines).toEqual([]);
     });
   });
 });

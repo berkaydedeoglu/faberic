@@ -1,58 +1,94 @@
 import { inject, singleton } from "tsyringe";
-import type { ContinueSessionOptions, CreateSessionOptions } from "../../models/index.ts";
+import type { ContinueSessionOptions, CreateSessionOptions, EventObserver } from "../../models/index.ts";
 import { type PiSessionHandle, PiSessionClient, type SessionSdk } from "../../utils/clients/pi/client.ts";
-import { NoActiveSessionError, SessionAlreadyActiveError } from "../../utils/errors/session.errors.ts";
+import { EventManager } from "../event/event-manager.service.ts";
+import { NoActiveSessionError, SessionNotOpenError } from "../../utils/errors/session.errors.ts";
+
+interface OpenSession {
+  readonly handle: PiSessionHandle;
+  readonly unsubscribe: () => void;
+}
 
 @singleton()
 export class SessionManagerService {
-  private current: PiSessionHandle | undefined;
+  // Map keeps insertion order, so the first entry is the oldest open session.
+  private readonly sessions = new Map<string, OpenSession>();
+  // Unset (or closed) means the oldest open session is the default.
+  private defaultId: string | undefined;
 
-  constructor(@inject(PiSessionClient) private readonly sdk: SessionSdk) {}
+  constructor(
+    @inject(PiSessionClient) private readonly sdk: SessionSdk,
+    @inject(EventManager) private readonly observer: EventObserver,
+  ) {}
 
-  hasActiveSession(): boolean {
-    return this.current !== undefined;
+  hasSessions(): boolean {
+    return this.sessions.size > 0;
   }
 
-  getActiveSession(): PiSessionHandle {
-    if (!this.current) {
+  listSessions(): PiSessionHandle[] {
+    return [...this.sessions.values()].map(({ handle }) => handle);
+  }
+
+  getDefaultSession(): PiSessionHandle {
+    const chosen = this.defaultId === undefined ? undefined : this.sessions.get(this.defaultId);
+    const [first] = this.sessions.values();
+    const session = chosen ?? first;
+    if (!session) {
       throw new NoActiveSessionError();
     }
-    return this.current;
+    return session.handle;
   }
 
-  createSession(options: CreateSessionOptions, force = false): Promise<PiSessionHandle> {
-    return this.activate(() => this.sdk.createSession(options), force);
+  setDefaultSession(sessionId: string): PiSessionHandle {
+    const handle = this.getSession(sessionId);
+    this.defaultId = handle.id;
+    return handle;
   }
 
-  async continueSession(options: ContinueSessionOptions, force = false): Promise<PiSessionHandle> {
-    if (this.current?.id === options.sessionId) {
-      return this.current;
+  /** The open session with this id, or the default session when no id is given. */
+  getSession(sessionId?: string): PiSessionHandle {
+    if (sessionId === undefined) {
+      return this.getDefaultSession();
     }
-    return this.activate(() => this.sdk.continueSession(options), force);
-  }
-
-  private async activate(open: () => Promise<PiSessionHandle>, force: boolean): Promise<PiSessionHandle> {
-    const previous = this.current;
-    if (previous && !force) {
-      throw new SessionAlreadyActiveError(previous.id);
+    const open = this.sessions.get(sessionId);
+    if (!open) {
+      throw new SessionNotOpenError(sessionId);
     }
-    const next = await open();
-    if (previous) {
-      await this.sdk.abortSession(previous);
-      this.sdk.disposeSession(previous);
+    return open.handle;
+  }
+
+  async createSession(options: CreateSessionOptions): Promise<PiSessionHandle> {
+    return this.add(await this.sdk.createSession(options));
+  }
+
+  async continueSession(options: ContinueSessionOptions): Promise<PiSessionHandle> {
+    const open = this.sessions.get(options.sessionId);
+    if (open) {
+      return open.handle;
     }
-    this.current = next;
-    return next;
+    return this.add(await this.sdk.continueSession(options));
   }
 
-  async abortActiveSession(): Promise<void> {
-    await this.sdk.abortSession(this.getActiveSession());
+  async abortSession(sessionId?: string): Promise<PiSessionHandle> {
+    const handle = this.getSession(sessionId);
+    await this.sdk.abortSession(handle);
+    return handle;
   }
 
-  async destroyActiveSession(): Promise<void> {
-    if (!this.current) return;
-    await this.sdk.abortSession(this.current);
-    this.sdk.disposeSession(this.current);
-    this.current = undefined;
+  async destroySession(sessionId?: string): Promise<PiSessionHandle> {
+    const handle = this.getSession(sessionId);
+    await this.sdk.abortSession(handle);
+    this.sessions.get(handle.id)?.unsubscribe();
+    this.sdk.disposeSession(handle);
+    this.sessions.delete(handle.id);
+    if (this.defaultId === handle.id) {
+      this.defaultId = undefined;
+    }
+    return handle;
+  }
+
+  private add(handle: PiSessionHandle): PiSessionHandle {
+    this.sessions.set(handle.id, { handle, unsubscribe: this.sdk.subscribe(handle, this.observer) });
+    return handle;
   }
 }

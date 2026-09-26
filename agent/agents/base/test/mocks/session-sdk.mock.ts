@@ -1,7 +1,8 @@
 import {
+  type AgentEvent,
   type ContinueSessionOptions,
   type CreateSessionOptions,
-  type ListSessionsOptions,
+  type EventObserver,
   type ModelInfo,
   type SessionMessage,
   type SessionStats,
@@ -16,7 +17,6 @@ import type { PiSessionHandle, SessionSdk } from "../../src/utils/clients/pi/cli
 import { MissingCredentialsError, SessionNotFoundError } from "../../src/utils/errors/session.errors.ts";
 
 interface MockSession {
-  cwd: string;
   createdAt: number;
   modifiedAt: number;
   model: ModelInfo;
@@ -26,6 +26,14 @@ interface MockSession {
   streaming: boolean;
   aborted: boolean;
   disposed: boolean;
+}
+
+export class RecordingObserver implements EventObserver {
+  readonly events: AgentEvent[] = [];
+
+  update(event: AgentEvent): void {
+    this.events.push(event);
+  }
 }
 
 function clampThinkingLevel(level: ThinkingLevel, available: readonly ThinkingLevel[]): ThinkingLevel {
@@ -46,6 +54,7 @@ function clampThinkingLevel(level: ThinkingLevel, available: readonly ThinkingLe
 export class MockSessionSdk implements SessionSdk {
   readonly sessions = new Map<string, MockSession>();
   readonly stored = new Map<string, MockSession>();
+  readonly observers = new Map<string, Set<EventObserver>>();
   private seq = 0;
   promptDelay = 0;
   preflightWarnings: string[] = [];
@@ -63,7 +72,6 @@ export class MockSessionSdk implements SessionSdk {
     const id = `mock_${this.seq++}`;
     const now = Date.now();
     const session: MockSession = {
-      cwd: options.cwd ?? process.cwd(),
       createdAt: now,
       modifiedAt: now,
       model: { provider: options.provider ?? "anthropic", id: options.model ?? "claude-sonnet-4-5", name: options.model ?? "claude-sonnet-4-5" },
@@ -91,18 +99,15 @@ export class MockSessionSdk implements SessionSdk {
     return { id: sessionId, createdAt: session.createdAt };
   }
 
-  async listSessions({ cwd = process.cwd(), all = false }: ListSessionsOptions): Promise<StoredSession[]> {
-    return this.persisted()
-      .filter(([, session]) => all || session.cwd === cwd)
-      .map(([id, session]) => ({
-        id,
-        cwd: session.cwd,
-        name: undefined,
-        createdAt: session.createdAt,
-        modifiedAt: session.modifiedAt,
-        messageCount: session.messages.length,
-        firstMessage: session.messages[0]?.text ?? "",
-      }));
+  async listSessions(): Promise<StoredSession[]> {
+    return this.persisted().map(([id, session]) => ({
+      id,
+      name: undefined,
+      createdAt: session.createdAt,
+      modifiedAt: session.modifiedAt,
+      messageCount: session.messages.length,
+      firstMessage: session.messages[0]?.text ?? "",
+    }));
   }
 
   private resolve(handle: PiSessionHandle): MockSession {
@@ -119,6 +124,20 @@ export class MockSessionSdk implements SessionSdk {
   disposeSession(handle: PiSessionHandle): void {
     this.resolve(handle).disposed = true;
     this.sessions.delete(handle.id);
+  }
+
+  subscribe(handle: PiSessionHandle, observer: EventObserver): () => void {
+    this.resolve(handle);
+    const observers = this.observers.get(handle.id) ?? new Set();
+    observers.add(observer);
+    this.observers.set(handle.id, observers);
+    return () => observers.delete(observer);
+  }
+
+  private emit(handle: PiSessionHandle, type: string, description: string): void {
+    for (const observer of this.observers.get(handle.id) ?? []) {
+      observer.update({ type, sessionId: handle.id, time: new Date(), description });
+    }
   }
 
   getModel(handle: PiSessionHandle): ModelInfo | undefined {
@@ -174,11 +193,13 @@ export class MockSessionSdk implements SessionSdk {
       throw new MissingCredentialsError(session.model.provider);
     }
     session.streaming = true;
+    this.emit(handle, "agent_start", "agent run started");
     if (this.promptDelay > 0) await new Promise((r) => setTimeout(r, this.promptDelay));
     session.messages.push({ role: "user", text, timestamp: Date.now() });
     session.messages.push({ role: "assistant", text: `echo: ${text}`, timestamp: Date.now() });
     session.modifiedAt = Date.now();
     session.streaming = false;
+    this.emit(handle, "agent_end", "agent run finished");
   }
 
   async followUp(handle: PiSessionHandle, text: string): Promise<void> {
@@ -194,9 +215,12 @@ export class MockSessionSdk implements SessionSdk {
   }
 }
 
-export function createMockedSessionStack(sdk = new MockSessionSdk()) {
-  const manager = new SessionManagerService(sdk);
+export function createMockedSessionStack<O extends EventObserver = RecordingObserver>(
+  sdk = new MockSessionSdk(),
+  observer: O = new RecordingObserver() as EventObserver as O,
+) {
+  const manager = new SessionManagerService(sdk, observer);
   const service = new SessionService(sdk, manager);
   const controller = new SessionController(manager, service);
-  return { sdk, manager, service, controller };
+  return { sdk, observer, manager, service, controller };
 }

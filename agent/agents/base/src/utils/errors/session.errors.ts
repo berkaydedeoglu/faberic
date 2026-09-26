@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, UnavailableError } from "./app.errors.ts";
+import { NotFoundError, UnavailableError } from "./app.errors.ts";
 
 export class NoActiveSessionError extends NotFoundError {
   constructor() {
@@ -7,10 +7,10 @@ export class NoActiveSessionError extends NotFoundError {
   }
 }
 
-export class SessionAlreadyActiveError extends ConflictError {
+export class SessionNotOpenError extends NotFoundError {
   constructor(public readonly sessionId: string) {
-    super(`A session (${sessionId}) is already active. Destroy it first, or use force.`);
-    this.name = "SessionAlreadyActiveError";
+    super(`Session "${sessionId}" is not open. Create or continue it first.`);
+    this.name = "SessionNotOpenError";
   }
 }
 

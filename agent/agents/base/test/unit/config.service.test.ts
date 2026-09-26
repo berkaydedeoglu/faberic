@@ -38,6 +38,37 @@ describe("ConfigService.load", () => {
     ).toEqual({ apiUrl: "https://orchestrator/events", apiToken: "t" });
   });
 
+  it("keeps the workspace at ~/.faberic/workspace, whatever the environment says", () => {
+    expect(ConfigService.load({ HOME: "/home/me" }).workspace).toEqual({ dir: "/home/me/.faberic/workspace" });
+    expect(ConfigService.load({ HOME: "/home/me", WORKSPACE_DIR: "/srv/workspace" }).workspace).toEqual({
+      dir: "/home/me/.faberic/workspace",
+    });
+  });
+
+  it("clones three repositories at a time", () => {
+    expect(ConfigService.load({}).environment).toEqual({ cloneConcurrency: 3 });
+  });
+
+  it("logs info and up to the console and errors to ~/.faberic/logs/agent.log by default", () => {
+    expect(ConfigService.load({ HOME: "/home/me" }).logging).toEqual({
+      consoleLevel: "info",
+      fileLevel: "error",
+      file: "/home/me/.faberic/logs/agent.log",
+    });
+  });
+
+  it("reads the console level, the file level, and the file from separate variables", () => {
+    expect(
+      ConfigService.load({ LOG_CONSOLE_LEVEL: "warn", LOG_FILE_LEVEL: "debug", LOG_FILE: "/var/log/agent.log" }).logging,
+    ).toEqual({ consoleLevel: "warn", fileLevel: "debug", file: "/var/log/agent.log" });
+    expect(() => ConfigService.load({ LOG_CONSOLE_LEVEL: "verbose" })).toThrow('Invalid value for LOG_CONSOLE_LEVEL: "verbose"');
+    expect(() => ConfigService.load({ LOG_FILE_LEVEL: "verbose" })).toThrow('Invalid value for LOG_FILE_LEVEL: "verbose"');
+  });
+
+  it("serves the last 600 characters of the error lines found in the last 64 KiB of the log file", () => {
+    expect(ConfigService.load({}).monitoring).toEqual({ errorLogChars: 600, errorLogScanBytes: 64 * 1024 });
+  });
+
   it("batches events by 50 or every 10 seconds", () => {
     expect(ConfigService.load({}).events).toEqual({ batchSize: 50, flushIntervalMs: 10_000 });
   });

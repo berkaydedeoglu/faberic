@@ -37,6 +37,7 @@ export type SessionStatus = "idle" | "streaming" | "aborted" | "disposed";
 
 export interface SessionDescriptor {
   readonly id: string;
+  readonly isDefault: boolean;
   readonly status: SessionStatus;
   readonly model: ModelInfo | undefined;
   readonly thinkingLevel: ThinkingLevel;
@@ -47,12 +48,10 @@ export interface CreateSessionOptions {
   readonly provider?: string;
   readonly model?: string;
   readonly thinkingLevel?: ThinkingLevel;
-  readonly cwd?: string;
 }
 
 export interface StoredSession {
   readonly id: string;
-  readonly cwd: string;
   readonly name: string | undefined;
   readonly createdAt: number;
   readonly modifiedAt: number;
@@ -60,12 +59,6 @@ export interface StoredSession {
   readonly firstMessage: string;
 }
 
-export interface ListSessionsOptions {
-  readonly cwd?: string;
-  readonly all?: boolean;
-}
-
 export interface ContinueSessionOptions {
   readonly sessionId: string;
-  readonly cwd?: string;
 }

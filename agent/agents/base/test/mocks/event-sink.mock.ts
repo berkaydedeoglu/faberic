@@ -1,7 +1,9 @@
 import { ConfigService } from "../../src/config/config.service.ts";
 import type { AgentEvent } from "../../src/models/index.ts";
 import { EventManager } from "../../src/services/event/event-manager.service.ts";
+import type { LoggerService } from "../../src/services/log/logger.service.ts";
 import type { EventSink } from "../../src/utils/clients/orchestrator/client.ts";
+import { createTestLogger } from "./logger.mock.ts";
 
 export class MockEventSink implements EventSink {
   readonly batches: AgentEvent[][] = [];
@@ -35,8 +37,11 @@ export function eventsConfig(events: Partial<{ batchSize: number; flushIntervalM
   return { get: () => ({ ...config, events: { ...config.events, ...events } }) } as ConfigService;
 }
 
-export function createMockedEventStack(events: Partial<{ batchSize: number; flushIntervalMs: number }> = {}) {
+export function createMockedEventStack(
+  events: Partial<{ batchSize: number; flushIntervalMs: number }> = {},
+  logger: LoggerService = createTestLogger().logger,
+) {
   const sink = new MockEventSink();
-  const manager = new EventManager(sink, eventsConfig(events));
-  return { sink, manager };
+  const manager = new EventManager(sink, eventsConfig(events), logger);
+  return { sink, manager, logger };
 }

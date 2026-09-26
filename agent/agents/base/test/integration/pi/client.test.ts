@@ -60,6 +60,8 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
   let dir: string;
   let savedEnv: Record<string, string | undefined>;
 
+  const workspace = () => join(dir, "workspace");
+
   function client(env: Record<string, string> = {}): PiSessionClient {
     const config = ConfigService.load({
       PI_AGENT_DIR: dir,
@@ -68,7 +70,7 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
       PI_SESSION_DIR: join(dir, "sessions"),
       ...env,
     });
-    return new PiSessionClient({ get: () => config } as ConfigService);
+    return new PiSessionClient({ get: () => ({ ...config, workspace: { dir: workspace() } }) } as ConfigService);
   }
 
   beforeEach(() => {
@@ -125,25 +127,23 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
   describe("stored sessions", () => {
     const sessionDir = () => join(dir, "sessions");
 
-    it("lists sessions of a directory, or of every directory with all", async () => {
-      const id = seedSession(dir, sessionDir(), { savedModel: true });
-      const pi = client();
+    it("lists only the sessions of the workspace", async () => {
+      const id = seedSession(workspace(), sessionDir(), { savedModel: true });
+      seedSession(join(dir, "elsewhere"), sessionDir(), { savedModel: true });
 
-      const [stored] = await pi.listSessions({ cwd: dir });
-      expect(stored).toMatchObject({ id, cwd: dir, firstMessage: "remember banana" });
-      expect(stored!.messageCount).toBeGreaterThan(0);
-      expect(stored!.modifiedAt).toBeGreaterThanOrEqual(stored!.createdAt);
-
-      expect(await pi.listSessions({ cwd: join(dir, "elsewhere") })).toEqual([]);
-      expect((await pi.listSessions({ all: true })).map((session) => session.id)).toEqual([id]);
+      const stored = await client().listSessions();
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({ id, firstMessage: "remember banana" });
+      expect(stored[0]!.messageCount).toBeGreaterThan(0);
+      expect(stored[0]!.modifiedAt).toBeGreaterThanOrEqual(stored[0]!.createdAt);
     });
 
     it("continues a session, restoring its saved model and flattening every message kind", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-test";
-      const id = seedSession(dir, sessionDir(), { savedModel: true });
+      const id = seedSession(workspace(), sessionDir(), { savedModel: true });
       const pi = client();
 
-      const session = await pi.continueSession({ sessionId: id, cwd: dir });
+      const session = await pi.continueSession({ sessionId: id });
       expect(session.id).toBe(id);
       expect(pi.getModel(session)).toMatchObject({ provider: "anthropic", id: "claude-opus-4-5" });
 
@@ -158,38 +158,35 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
     });
 
     it("falls back to the configured default model when the session saved none", async () => {
-      const id = seedSession(dir, sessionDir(), { savedModel: false });
+      const id = seedSession(workspace(), sessionDir(), { savedModel: false });
       const pi = client();
-      const session = await pi.continueSession({ sessionId: id, cwd: dir });
+      const session = await pi.continueSession({ sessionId: id });
       expect(pi.getModel(session)).toMatchObject({ provider: "anthropic", id: "claude-sonnet-4-5" });
       pi.disposeSession(session);
     });
 
-    it("finds a session from another directory and rejects unknown ids", async () => {
-      const id = seedSession(dir, sessionDir(), { savedModel: true });
+    it("does not continue sessions of other directories, and rejects unknown ids", async () => {
+      const elsewhere = seedSession(join(dir, "elsewhere"), sessionDir(), { savedModel: true });
       const pi = client();
 
-      const session = await pi.continueSession({ sessionId: id, cwd: join(dir, "elsewhere") });
-      expect(session.id).toBe(id);
-      pi.disposeSession(session);
-
-      await expect(pi.continueSession({ sessionId: "missing", cwd: dir })).rejects.toThrow(SessionNotFoundError);
+      await expect(pi.continueSession({ sessionId: elsewhere })).rejects.toThrow(SessionNotFoundError);
+      await expect(pi.continueSession({ sessionId: "missing" })).rejects.toThrow(SessionNotFoundError);
     });
   });
 
   describe("active session operations", () => {
     it("rejects unknown models on create and on switch", async () => {
       const pi = client();
-      await expect(pi.createSession({ model: "no-such-model", cwd: dir })).rejects.toThrow(UnknownModelError);
+      await expect(pi.createSession({ model: "no-such-model" })).rejects.toThrow(UnknownModelError);
 
-      const session = await pi.createSession({ cwd: dir });
+      const session = await pi.createSession({});
       await expect(pi.setModel(session, "anthropic", "no-such-model")).rejects.toThrow(UnknownModelError);
       pi.disposeSession(session);
     });
 
     it("refuses to switch to a model whose provider has no credentials", async () => {
       const pi = client();
-      const session = await pi.createSession({ cwd: dir });
+      const session = await pi.createSession({});
       await expect(pi.setModel(session, "anthropic", "claude-opus-4-5")).rejects.toThrow(MissingCredentialsError);
       expect(pi.getModel(session)?.id).toBe("claude-sonnet-4-5");
       pi.disposeSession(session);
@@ -198,7 +195,7 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
     it("switches the model when the provider has credentials", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-test";
       const pi = client();
-      const session = await pi.createSession({ cwd: dir });
+      const session = await pi.createSession({});
       expect(await pi.setModel(session, "anthropic", "claude-opus-4-5")).toMatchObject({ id: "claude-opus-4-5" });
       expect(pi.getModel(session)?.id).toBe("claude-opus-4-5");
       pi.disposeSession(session);
@@ -206,7 +203,7 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
 
     it("reads and clamps thinking levels to what the model supports", async () => {
       const pi = client();
-      const session = await pi.createSession({ thinkingLevel: "low", cwd: dir });
+      const session = await pi.createSession({ thinkingLevel: "low" });
       const available = pi.getAvailableThinkingLevels(session);
 
       expect(pi.getThinkingLevel(session)).toBe("low");
@@ -217,7 +214,7 @@ describe("PiSessionClient against the real pi SDK (offline)", () => {
 
     it("aborts an idle session and forgets it once disposed", async () => {
       const pi = client();
-      const session = await pi.createSession({ cwd: dir });
+      const session = await pi.createSession({});
 
       expect(pi.isStreaming(session)).toBe(false);
       await pi.abortSession(session);

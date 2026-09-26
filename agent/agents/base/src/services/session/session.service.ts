@@ -1,7 +1,7 @@
 import { inject, singleton } from "tsyringe";
 import type {
-  ListSessionsOptions,
   ModelInfo,
+  SessionDescriptor,
   SessionMessage,
   SessionStats,
   StoredSession,
@@ -10,6 +10,7 @@ import type {
 import { type PiSessionHandle, PiSessionClient, type SessionSdk } from "../../utils/clients/pi/client.ts";
 import { SessionManagerService } from "./session-manager.service.ts";
 
+/** Operations on an open session. Every `sessionId` is optional; without it the default session is used. */
 @singleton()
 export class SessionService {
   constructor(
@@ -17,24 +18,24 @@ export class SessionService {
     @inject(SessionManagerService) private readonly sessionManager: SessionManagerService,
   ) {}
 
-  private get session(): PiSessionHandle {
-    return this.sessionManager.getActiveSession();
+  private session(sessionId?: string): PiSessionHandle {
+    return this.sessionManager.getSession(sessionId);
   }
 
-  async prompt(text: string): Promise<void> {
-    await this.sdk.prompt(this.session, text);
+  async prompt(text: string, sessionId?: string): Promise<void> {
+    await this.sdk.prompt(this.session(sessionId), text);
   }
 
-  async followUp(text: string): Promise<void> {
-    await this.sdk.followUp(this.session, text);
+  async followUp(text: string, sessionId?: string): Promise<void> {
+    await this.sdk.followUp(this.session(sessionId), text);
   }
 
-  getModel(): ModelInfo | undefined {
-    return this.sdk.getModel(this.session);
+  getModel(sessionId?: string): ModelInfo | undefined {
+    return this.sdk.getModel(this.session(sessionId));
   }
 
-  async setModel(provider: string, modelId: string): Promise<ModelInfo> {
-    return this.sdk.setModel(this.session, provider, modelId);
+  async setModel(provider: string, modelId: string, sessionId?: string): Promise<ModelInfo> {
+    return this.sdk.setModel(this.session(sessionId), provider, modelId);
   }
 
   preflight(): Promise<string[]> {
@@ -45,31 +46,39 @@ export class SessionService {
     return this.sdk.listAvailableModels(provider);
   }
 
-  listSessions(options: ListSessionsOptions): Promise<StoredSession[]> {
-    return this.sdk.listSessions(options);
+  listSessions(): Promise<StoredSession[]> {
+    return this.sdk.listSessions();
   }
 
-  getThinkingLevel(): ThinkingLevel {
-    return this.sdk.getThinkingLevel(this.session);
+  getThinkingLevel(sessionId?: string): ThinkingLevel {
+    return this.sdk.getThinkingLevel(this.session(sessionId));
   }
 
-  setThinkingLevel(level: ThinkingLevel): ThinkingLevel {
-    return this.sdk.setThinkingLevel(this.session, level);
+  setThinkingLevel(level: ThinkingLevel, sessionId?: string): ThinkingLevel {
+    return this.sdk.setThinkingLevel(this.session(sessionId), level);
   }
 
-  getAvailableThinkingLevels(): ThinkingLevel[] {
-    return this.sdk.getAvailableThinkingLevels(this.session);
+  getAvailableThinkingLevels(sessionId?: string): ThinkingLevel[] {
+    return this.sdk.getAvailableThinkingLevels(this.session(sessionId));
   }
 
-  getStats(): SessionStats {
-    return this.sdk.getSessionStats(this.session);
+  getStats(sessionId?: string): SessionStats {
+    return this.sdk.getSessionStats(this.session(sessionId));
   }
 
-  getMessages(): SessionMessage[] {
-    return this.sdk.getMessages(this.session);
+  getMessages(sessionId?: string): SessionMessage[] {
+    return this.sdk.getMessages(this.session(sessionId));
   }
 
-  isStreaming(): boolean {
-    return this.sdk.isStreaming(this.session);
+  describe(sessionId?: string): SessionDescriptor {
+    const handle = this.session(sessionId);
+    return {
+      id: handle.id,
+      isDefault: handle.id === this.sessionManager.getDefaultSession().id,
+      status: this.sdk.isStreaming(handle) ? "streaming" : "idle",
+      model: this.sdk.getModel(handle),
+      thinkingLevel: this.sdk.getThinkingLevel(handle),
+      createdAt: handle.createdAt,
+    };
   }
 }

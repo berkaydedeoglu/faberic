@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { SessionManagerService } from "../../src/services/session/session-manager.service.ts";
 import { SessionService } from "../../src/services/session/session.service.ts";
-import { MockSessionSdk } from "../mocks/session-sdk.mock.ts";
+import { MockSessionSdk, RecordingObserver } from "../mocks/session-sdk.mock.ts";
 
 describe("SessionService", () => {
   let mockSdk: MockSessionSdk;
   let manager: SessionManagerService;
+  let observer: RecordingObserver;
   let service: SessionService;
 
   beforeEach(async () => {
     mockSdk = new MockSessionSdk();
-    manager = new SessionManagerService(mockSdk);
+    observer = new RecordingObserver();
+    manager = new SessionManagerService(mockSdk, observer);
     service = new SessionService(mockSdk, manager);
     await manager.createSession({ provider: "anthropic", model: "claude-sonnet-4-5", thinkingLevel: "low" });
   });
@@ -34,7 +36,7 @@ describe("SessionService", () => {
   });
 
   it("clamps to the nearest supported level instead of throwing, like the real SDK", () => {
-    const handle = manager.getActiveSession();
+    const handle = manager.getDefaultSession();
     mockSdk.sessions.get(handle.id)!.availableThinkingLevels = ["off", "minimal", "low", "medium", "high"];
 
     const effective = service.setThinkingLevel("max");
@@ -62,13 +64,13 @@ describe("SessionService", () => {
   it("reports streaming state while a prompt is in flight", async () => {
     mockSdk.promptDelay = 20;
     const pending = service.prompt("slow");
-    expect(service.isStreaming()).toBe(true);
+    expect(service.describe().status).toBe("streaming");
     await pending;
-    expect(service.isStreaming()).toBe(false);
+    expect(service.describe().status).toBe("idle");
   });
 
-  it("propagates NoActiveSessionError when there is no active session", async () => {
-    await manager.destroyActiveSession();
+  it("propagates NoActiveSessionError when there is no session", async () => {
+    await manager.destroySession();
     expect(() => service.getModel()).toThrow();
   });
 });

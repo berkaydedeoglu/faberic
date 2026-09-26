@@ -2,6 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   type AgentSession,
+  type AgentSessionEvent,
   createAgentSession,
   ModelRuntime,
   SessionManager as PiSessionManager,
@@ -10,9 +11,10 @@ import {
 import { inject, singleton } from "tsyringe";
 import { ConfigService } from "../../../config/config.service.ts";
 import type {
+  AgentEvent,
   ContinueSessionOptions,
   CreateSessionOptions,
-  ListSessionsOptions,
+  EventObserver,
   ModelInfo,
   SessionMessage,
   SessionStats,
@@ -30,9 +32,10 @@ export interface SessionSdk {
   preflight(): Promise<string[]>;
   createSession(options: CreateSessionOptions): Promise<PiSessionHandle>;
   continueSession(options: ContinueSessionOptions): Promise<PiSessionHandle>;
-  listSessions(options: ListSessionsOptions): Promise<StoredSession[]>;
+  listSessions(): Promise<StoredSession[]>;
   abortSession(handle: PiSessionHandle): Promise<void>;
   disposeSession(handle: PiSessionHandle): void;
+  subscribe(handle: PiSessionHandle, observer: EventObserver): () => void;
 
   getModel(handle: PiSessionHandle): ModelInfo | undefined;
   setModel(handle: PiSessionHandle, provider: string, modelId: string): Promise<ModelInfo>;
@@ -76,10 +79,20 @@ function toSessionMessage(message: AgentMessage): SessionMessage {
   return { role: message.role, text: messageText(message), timestamp: message.timestamp };
 }
 
+const EVENT_DESCRIPTIONS: Partial<Record<AgentSessionEvent["type"], string>> = {
+  agent_start: "agent run started",
+  agent_end: "agent run finished",
+};
+
+function toAgentEvent(sessionId: string, event: AgentSessionEvent): AgentEvent | undefined {
+  const description = EVENT_DESCRIPTIONS[event.type];
+  if (!description) return undefined;
+  return { type: event.type, sessionId, time: new Date(), description };
+}
+
 function toStoredSession(info: SessionInfo): StoredSession {
   return {
     id: info.id,
-    cwd: info.cwd,
     name: info.name,
     createdAt: info.created.getTime(),
     modifiedAt: info.modified.getTime(),
@@ -94,6 +107,11 @@ export class PiSessionClient implements SessionSdk {
   private modelRuntimePromise: Promise<ModelRuntime> | undefined;
 
   constructor(@inject(ConfigService) private readonly config: ConfigService) {}
+
+  // The single working directory: every session is created, listed, and resumed here.
+  private get workspace(): string {
+    return this.config.get().workspace.dir;
+  }
 
   private getModelRuntime(): Promise<ModelRuntime> {
     if (!this.modelRuntimePromise) {
@@ -158,26 +176,28 @@ export class PiSessionClient implements SessionSdk {
       throw new UnknownModelError(provider, modelId);
     }
 
-    const cwd = options.cwd ?? process.cwd();
     const { session } = await createAgentSession({
-      cwd,
+      cwd: this.workspace,
       agentDir: pi.agentDir,
       modelRuntime,
       model,
       thinkingLevel: options.thinkingLevel ?? pi.defaultThinkingLevel,
-      sessionManager: PiSessionManager.create(cwd, pi.sessionDir),
+      sessionManager: PiSessionManager.create(this.workspace, pi.sessionDir),
     });
     return this.register(session);
   }
 
-  async continueSession({ sessionId, cwd = process.cwd() }: ContinueSessionOptions): Promise<PiSessionHandle> {
+  async continueSession({ sessionId }: ContinueSessionOptions): Promise<PiSessionHandle> {
     const { pi } = this.config.get();
-    const path = await this.findSessionPath(sessionId, cwd);
+    const path = PiSessionManager.findById(this.workspace, sessionId, pi.sessionDir);
+    if (!path) {
+      throw new SessionNotFoundError(sessionId);
+    }
     const sessionManager = PiSessionManager.open(path, pi.sessionDir);
     const modelRuntime = await this.getModelRuntime();
     const hasSavedModel = sessionManager.getEntries().some((entry) => entry.type === "model_change");
     const { session } = await createAgentSession({
-      cwd: sessionManager.getCwd(),
+      cwd: this.workspace,
       agentDir: pi.agentDir,
       modelRuntime,
       model: hasSavedModel ? undefined : modelRuntime.getModel(pi.defaultProvider, pi.defaultModel),
@@ -186,21 +206,9 @@ export class PiSessionClient implements SessionSdk {
     return this.register(session);
   }
 
-  async listSessions({ cwd = process.cwd(), all = false }: ListSessionsOptions): Promise<StoredSession[]> {
-    const { pi } = this.config.get();
-    const sessions = all ? await PiSessionManager.listAll(pi.sessionDir) : await PiSessionManager.list(cwd, pi.sessionDir);
+  async listSessions(): Promise<StoredSession[]> {
+    const sessions = await PiSessionManager.list(this.workspace, this.config.get().pi.sessionDir);
     return sessions.map(toStoredSession);
-  }
-
-  private async findSessionPath(sessionId: string, cwd: string): Promise<string> {
-    const { pi } = this.config.get();
-    const path =
-      PiSessionManager.findById(cwd, sessionId, pi.sessionDir) ??
-      (await PiSessionManager.listAll(pi.sessionDir)).find((info) => info.id === sessionId)?.path;
-    if (!path) {
-      throw new SessionNotFoundError(sessionId);
-    }
-    return path;
   }
 
   private register(session: AgentSession): PiSessionHandle {
@@ -216,6 +224,13 @@ export class PiSessionClient implements SessionSdk {
   disposeSession(handle: PiSessionHandle): void {
     this.resolve(handle).dispose();
     this.sessions.delete(handle.id);
+  }
+
+  subscribe(handle: PiSessionHandle, observer: EventObserver): () => void {
+    return this.resolve(handle).subscribe((event) => {
+      const agentEvent = toAgentEvent(handle.id, event);
+      if (agentEvent) observer.update(agentEvent);
+    });
   }
 
   getModel(handle: PiSessionHandle): ModelInfo | undefined {

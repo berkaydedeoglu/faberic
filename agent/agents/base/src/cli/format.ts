@@ -25,7 +25,7 @@ export function formatSessions(sessions: StoredSession[]): string {
     .map((session) => {
       const preview = session.firstMessage.replace(/\s+/g, " ").slice(0, FIRST_MESSAGE_PREVIEW);
       const modified = new Date(session.modifiedAt).toISOString();
-      return `${session.id}  ${modified}  ${session.messageCount} msgs  ${session.cwd}  ${preview}`;
+      return `${session.id}  ${modified}  ${session.messageCount} msgs  ${preview}`;
     })
     .join("\n");
 }

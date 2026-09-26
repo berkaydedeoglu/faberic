@@ -8,8 +8,18 @@ export class OrchestratorNotConfiguredError extends UnavailableError {
 }
 
 export class OrchestratorRequestError extends UnavailableError {
-  constructor(public readonly status: number) {
-    super(`Orchestrator API rejected the events with HTTP ${status}.`);
+  constructor(
+    public readonly path: string,
+    public readonly status: number,
+  ) {
+    super(`Orchestrator API answered POST /${path} with HTTP ${status}.`);
     this.name = "OrchestratorRequestError";
+  }
+}
+
+export class GitTokenMissingError extends UnavailableError {
+  constructor(public readonly url: string) {
+    super(`Orchestrator API returned no git token for "${url}".`);
+    this.name = "GitTokenMissingError";
   }
 }
