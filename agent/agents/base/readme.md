@@ -17,6 +17,28 @@ bun run start                # interactive REPL
 bun run start serve          # HTTP API on http://0.0.0.0:6565
 ```
 
+## Docker
+
+The image compiles the agent into a single executable (`bun build --compile`) and runs `serve`.
+It uses the pi SDK in-process; the pi CLI is not installed.
+
+```bash
+docker build -t faberic-agent-base .
+docker run -d -p 6565:6565 -e OPENROUTER_API_KEY -e PI_DEFAULT_PROVIDER=openrouter \
+  -e ORCHESTRATOR_API_URL -e ORCHESTRATOR_API_TOKEN faberic-agent-base
+```
+
+- Configuration is the same environment variables as in [Configuration](#configuration).
+- Nothing needs a volume: the workspace, pi's config and sessions, and the log file all live under
+  the container's `HOME` (`/home/agent`, non-root user `agent`) and are created on start. They are
+  gone when the container is removed.
+- pi's tools find what they shell out to on `PATH`: `bash`, `git`, `rg` (grep tool), `fd` (find
+  tool). The image also has `openssh-client`, `curl`, `wget`, `jq`, `less`, `tree`, `file`,
+  `procps`, `diffutils`, `patch`, and archive tools for the agent's bash use.
+- `--build-arg EXTRA_PACKAGES="python3 nodejs"` installs more apt packages.
+- pi's `package.json` and `photon_rs_bg.wasm` (image resizing) ship next to the executable in
+  `/app`, where a compiled pi looks for them.
+
 ## CLI
 
 The CLI is the entry point (`src/index.ts`). Run it with `bun run start <command>`, or with no
