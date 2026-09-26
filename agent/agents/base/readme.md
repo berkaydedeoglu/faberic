@@ -130,6 +130,9 @@ Start with `bun run start serve`. Several sessions can be open at once. Endpoint
 session take an optional `?sessionId=<id>` query parameter; without it (or when it is empty) they act
 on the default session. Request and response bodies are JSON.
 
+`insomnia.json` is an Insomnia collection with every endpoint (Import → From File). Its `local`
+environment has `base_url` and `session_id`; an empty `session_id` targets the default session.
+
 | Method | Path                      | Description                                                            |
 |--------|---------------------------|------------------------------------------------------------------------|
 | GET    | `/health`                 | Liveness check                                                         |

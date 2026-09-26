@@ -1,0 +1,666 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-09-26T00:00:00.000Z",
+  "__export_source": "faberic.agent-base",
+  "resources": [
+    {
+      "_id": "wrk_faberic_agent_base",
+      "_type": "workspace",
+      "parentId": null,
+      "name": "faberic agent-base",
+      "description": "HTTP API of the faberic base agent",
+      "scope": "collection",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_faberic_agent_base",
+      "name": "Base Environment",
+      "data": {},
+      "dataPropertyOrder": {},
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "env_local",
+      "_type": "environment",
+      "parentId": "env_base",
+      "name": "local",
+      "data": {
+        "base_url": "http://localhost:6565",
+        "session_id": ""
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url",
+          "session_id"
+        ]
+      },
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "fld_health",
+      "_type": "request_group",
+      "parentId": "wrk_faberic_agent_base",
+      "name": "Health",
+      "metaSortKey": 0,
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "fld_session",
+      "_type": "request_group",
+      "parentId": "wrk_faberic_agent_base",
+      "name": "Session",
+      "metaSortKey": 1,
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "fld_environment",
+      "_type": "request_group",
+      "parentId": "wrk_faberic_agent_base",
+      "name": "Environment",
+      "metaSortKey": 2,
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "fld_monitoring",
+      "_type": "request_group",
+      "parentId": "wrk_faberic_agent_base",
+      "name": "Monitoring",
+      "metaSortKey": 3,
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_00",
+      "_type": "request",
+      "parentId": "fld_health",
+      "name": "Health",
+      "description": "Liveness check",
+      "method": "GET",
+      "url": "{{ _.base_url }}/health",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 0,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_01",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Create session",
+      "description": "Open a new session; every field is optional (defaults from PI_DEFAULT_*). Returns 201.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/session",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"provider\": \"openrouter\",\n  \"model\": \"z-ai/glm-5.3-flash\",\n  \"thinkingLevel\": \"medium\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 1,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_02",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Get session",
+      "description": "Get a session",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 2,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_03",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "List open sessions",
+      "description": "Sessions open in this process",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/open",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 3,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_04",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Set default session",
+      "description": "Make an open session the default",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/session/default",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"sessionId\": \"{{ _.session_id }}\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 4,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_05",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "List stored sessions",
+      "description": "Stored pi sessions of the workspace",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/list",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 5,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_06",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Continue session",
+      "description": "Open a stored session next to the open ones",
+      "method": "POST",
+      "url": "{{ _.base_url }}/session/continue",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"sessionId\": \"{{ _.session_id }}\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 6,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_07",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Abort",
+      "description": "Abort the running operation, keep the session",
+      "method": "POST",
+      "url": "{{ _.base_url }}/session/abort",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 7,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_08",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Destroy session",
+      "description": "Abort and close a session",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/session",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 8,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_09",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Get model",
+      "description": "Get the model",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/model",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 9,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_10",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Set model",
+      "description": "Switch the model",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/session/model",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"provider\": \"anthropic\",\n  \"model\": \"claude-sonnet-4-5\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 10,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_11",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "List models",
+      "description": "Models usable with the configured credentials; no session required",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/models",
+      "parameters": [
+        {
+          "name": "provider",
+          "value": "",
+          "disabled": true
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 11,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_12",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Get thinking level",
+      "description": "Thinking level and the levels the model supports",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/thinking-level",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 12,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_13",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Set thinking level",
+      "description": "off, minimal, low, medium, high, xhigh, max",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/session/thinking-level",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"thinkingLevel\": \"high\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 13,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_14",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Stats",
+      "description": "Token usage, cost, and message counts",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/stats",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 14,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_15",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Messages",
+      "description": "The conversation",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/messages",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 15,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_16",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Prompt",
+      "description": "Send a prompt; returns messages and stats",
+      "method": "POST",
+      "url": "{{ _.base_url }}/session/prompt",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"text\": \"Explain the layout of this repository\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 16,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_17",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Follow-up",
+      "description": "Send a follow-up; returns messages and stats",
+      "method": "POST",
+      "url": "{{ _.base_url }}/session/follow-up",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        }
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"text\": \"Now add a unit test for it\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 17,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_18",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Clone repositories",
+      "description": "Clone into the workspace; 201, or 207 if any failed. HTTPS needs the orchestrator configured.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/clone",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"repositories\": [\n    {\n      \"url\": \"https://github.com/owner/repo.git\",\n      \"directory\": \"repo\",\n      \"depth\": 1\n    }\n  ]\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 18,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_19",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Write AGENTS.md",
+      "description": "Write AGENTS.md at the workspace root; returns 201 and path",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/agent-md",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"content\": \"# Project rules\\n\\n- Run the tests before finishing.\\n\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 19,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_20",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Inject skill",
+      "description": "Write .pi/skills/<name>/SKILL.md; returns 201 and path",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/skills",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"my-skill\",\n  \"content\": \"---\\nname: my-skill\\ndescription: What the skill does and when to use it\\n---\\n\\n# My skill\\n\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 20,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_21",
+      "_type": "request",
+      "parentId": "fld_monitoring",
+      "name": "Sessions",
+      "description": "Every open session with its stats",
+      "method": "GET",
+      "url": "{{ _.base_url }}/monitoring/sessions",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 21,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_22",
+      "_type": "request",
+      "parentId": "fld_monitoring",
+      "name": "Events",
+      "description": "Event manager counters",
+      "method": "GET",
+      "url": "{{ _.base_url }}/monitoring/events",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 22,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_23",
+      "_type": "request",
+      "parentId": "fld_monitoring",
+      "name": "Errors",
+      "description": "Tail of the error log",
+      "method": "GET",
+      "url": "{{ _.base_url }}/monitoring/errors",
+      "parameters": [],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 23,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    }
+  ]
+}
