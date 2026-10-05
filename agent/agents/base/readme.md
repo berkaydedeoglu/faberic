@@ -94,7 +94,7 @@ to keep spaces. Running `serve` inside the REPL keeps the process alive after yo
 | `session get-thinking-level`                    | Show the thinking level and the levels the model supports |
 | `session set-thinking-level <level>`            | Set the thinking level                                  |
 | `session stats`                                 | Show token usage, cost, and message counts              |
-| `session messages`                              | Print the conversation                                  |
+| `session messages`                              | Print the conversation (`--compact` for user/assistant only)          |
 | `session prompt <text...>`                      | Send a prompt and print the assistant's reply           |
 | `session follow-up <text...>`                   | Send a follow-up and print the assistant's reply        |
 
@@ -150,7 +150,7 @@ environment has `base_url` and `session_id`; an empty `session_id` targets the d
 | GET    | `/session/thinking-level` | Get the thinking level and supported levels                            |
 | PUT    | `/session/thinking-level` | Set the thinking level (`thinkingLevel`)                               |
 | GET    | `/session/stats`          | Get session stats                                                      |
-| GET    | `/session/messages`       | Get the conversation                                                   |
+| GET    | `/session/messages`       | Get the conversation (`?compact=true` for user/assistant only)         |
 | POST   | `/session/prompt`         | Send a prompt (`text`); returns 202 with the session descriptor, run continues in the background |
 | POST   | `/session/follow-up`      | Send a follow-up (`text`); returns `messages` and `stats`              |
 | POST   | `/environment/clone`      | Clone several repositories (`repositories: [{ url, directory, depth }]`) — 201, or 207 if any failed |

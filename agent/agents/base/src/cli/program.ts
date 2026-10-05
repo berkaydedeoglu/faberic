@@ -136,7 +136,8 @@ export function createProgram({ session, environment, monitoring, serve, default
   targeted(sessionCommand.command("stats").description("show session stats"))
     .action((options: Target) => print(session.getStats(options.session)));
   targeted(sessionCommand.command("messages").description("show session messages"))
-    .action((options: Target) => print(session.getMessages(options.session)));
+    .option("--compact", "only user and assistant messages")
+    .action((options: Target & { compact?: boolean }) => print(session.getMessages(options.session, options.compact)));
 
   targeted(sessionCommand.command("prompt").description("send a prompt and print the reply").argument("<text...>"))
     .action((words: string[], options: Target) => print(session.prompt(words, options.session)));

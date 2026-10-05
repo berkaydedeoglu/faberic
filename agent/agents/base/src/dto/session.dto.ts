@@ -19,6 +19,10 @@ export interface SetDefaultSessionInput {
   sessionId?: unknown;
 }
 
+export interface GetMessagesInput extends SessionTargetInput {
+  compact?: unknown;
+}
+
 export interface SetModelInput extends SessionTargetInput {
   provider?: unknown;
   model?: unknown;

@@ -467,6 +467,35 @@
       "modified": 1790430000000
     },
     {
+      "_id": "req_15_compact",
+      "_type": "request",
+      "parentId": "fld_session",
+      "name": "Messages (compact)",
+      "description": "Only user and assistant messages (tool calls, results and summaries filtered out)",
+      "method": "GET",
+      "url": "{{ _.base_url }}/session/messages",
+      "parameters": [
+        {
+          "name": "sessionId",
+          "value": "{{ _.session_id }}",
+          "description": "Open session to act on; empty = default session"
+        },
+        {
+          "name": "compact",
+          "value": "true",
+          "description": "Only user and assistant messages"
+        }
+      ],
+      "headers": [],
+      "body": {},
+      "authentication": {},
+      "metaSortKey": 15.5,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
       "_id": "req_16",
       "_type": "request",
       "parentId": "fld_session",

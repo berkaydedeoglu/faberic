@@ -89,9 +89,9 @@ export class SessionCliHandler {
     return toJson(this.controller.getStats({ sessionId }));
   }
 
-  async getMessages(sessionId?: string): Promise<string> {
+  async getMessages(sessionId?: string, compact?: boolean): Promise<string> {
     await this.ensureSession(sessionId);
-    return formatMessages(this.controller.getMessages({ sessionId }));
+    return formatMessages(this.controller.getMessages({ sessionId, compact }));
   }
 
   async prompt(words: string[], sessionId?: string): Promise<string> {

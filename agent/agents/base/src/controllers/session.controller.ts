@@ -2,6 +2,7 @@ import { inject, singleton } from "tsyringe";
 import type {
   ContinueSessionInput,
   CreateSessionInput,
+  GetMessagesInput,
   ListModelsInput,
   PromptInput,
   PromptResult,
@@ -29,6 +30,11 @@ import { optionalOneOf, optionalString, requireOneOf, requireString } from "../u
 function target({ sessionId }: SessionTargetInput): string | undefined {
   if (sessionId === undefined || (typeof sessionId === "string" && sessionId.trim() === "")) return undefined;
   return requireString(sessionId, "sessionId");
+}
+
+// Query params arrive as strings; accept the common truthy spellings.
+function isTruthy(value: unknown): boolean {
+  return value === true || value === "true" || value === "1" || value === "yes";
 }
 
 @singleton()
@@ -127,8 +133,13 @@ export class SessionController {
     return this.sessionService.getStats(target(input));
   }
 
-  getMessages(input: SessionTargetInput = {}): SessionMessage[] {
-    return this.sessionService.getMessages(target(input));
+  getMessages(input: GetMessagesInput = {}): SessionMessage[] {
+    const messages = this.sessionService.getMessages(target(input));
+    // Compact mode keeps only the conversation turns, dropping tool calls, results, and summaries.
+    if (isTruthy(input.compact)) {
+      return messages.filter((message) => message.role === "user" || message.role === "assistant");
+    }
+    return messages;
   }
 
   async prompt(input: PromptInput): Promise<PromptResult> {

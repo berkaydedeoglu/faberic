@@ -58,6 +58,7 @@ export class MockSessionSdk implements SessionSdk {
   readonly observers = new Map<string, Set<EventObserver>>();
   private seq = 0;
   promptDelay = 0;
+  extraMessages: SessionMessage[] = [];
   preflightWarnings: string[] = [];
   credentialedProviders = new Set(["anthropic", "openai"]);
   availableModels: ModelInfo[] = [
@@ -198,6 +199,7 @@ export class MockSessionSdk implements SessionSdk {
     if (this.promptDelay > 0) await new Promise((r) => setTimeout(r, this.promptDelay));
     session.messages.push({ role: "user", text, timestamp: Date.now() });
     session.messages.push({ role: "assistant", text: `echo: ${text}`, timestamp: Date.now() });
+    session.messages.push(...this.extraMessages);
     session.modifiedAt = Date.now();
     session.streaming = false;
     this.emit(handle, "agent_end", "agent run finished");

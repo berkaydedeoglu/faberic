@@ -91,6 +91,9 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
 
     expect(((await (await app.handle(request("GET", "/session/stats"))).json()) as { totalMessages: number }).totalMessages).toBe(4);
     expect((await (await app.handle(request("GET", "/session/messages"))).json()) as unknown[]).toHaveLength(4);
+    // Compact mode returns only the conversation turns.
+    const compact = (await (await app.handle(request("GET", "/session/messages?compact=true"))).json()) as { role: string }[];
+    expect(compact.every((m) => m.role === "user" || m.role === "assistant")).toBe(true);
     expect((await app.handle(request("GET", "/session"))).status).toBe(200);
     expect((await app.handle(request("POST", "/session/abort"))).status).toBe(200);
 

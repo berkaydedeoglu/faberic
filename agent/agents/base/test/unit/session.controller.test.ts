@@ -112,6 +112,18 @@ describe("SessionController", () => {
       expect(controller.getMessages()).toHaveLength(4);
     });
 
+    it("filters out non-conversation roles in compact mode", async () => {
+      sdk.extraMessages = [
+        { role: "toolCall", text: "bash(ls)", timestamp: Date.now() },
+        { role: "toolResult", text: "file.txt", timestamp: Date.now() },
+      ];
+      await controller.prompt({ text: "hi" });
+
+      expect(controller.getMessages().map((m) => m.role)).toEqual(["user", "assistant", "toolCall", "toolResult"]);
+      expect(controller.getMessages({ compact: "true" }).map((m) => m.text)).toEqual(["hi", "echo: hi"]);
+      expect(controller.getMessages({ compact: "false" })).toHaveLength(4);
+    });
+
     it("accepts a prompt without waiting and returns the session descriptor", async () => {
       sdk.promptDelay = 20;
       const session = await controller.startPrompt({ text: "go" });

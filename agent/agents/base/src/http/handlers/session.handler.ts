@@ -88,8 +88,8 @@ export class SessionHttpHandler {
     return this.controller.getStats(targetOf(request));
   }
 
-  getMessages(request: WithQuery) {
-    return this.controller.getMessages(targetOf(request));
+  getMessages({ query }: WithQuery) {
+    return this.controller.getMessages({ ...targetOf({ query }), compact: query.compact });
   }
 
   async prompt(request: WithBody & WithQuery & WithStatus) {
