@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { SessionManagerService } from "../../src/services/session/session-manager.service.ts";
 import { SessionService } from "../../src/services/session/session.service.ts";
 import { MockSessionSdk, RecordingObserver } from "../mocks/session-sdk.mock.ts";
+import { createTestLogger } from "../mocks/logger.mock.ts";
 
 describe("SessionService", () => {
   let mockSdk: MockSessionSdk;
@@ -13,7 +14,7 @@ describe("SessionService", () => {
     mockSdk = new MockSessionSdk();
     observer = new RecordingObserver();
     manager = new SessionManagerService(mockSdk, observer);
-    service = new SessionService(mockSdk, manager);
+    service = new SessionService(mockSdk, manager, createTestLogger().logger);
     await manager.createSession({ provider: "anthropic", model: "claude-sonnet-4-5", thinkingLevel: "low" });
   });
 
@@ -66,6 +67,15 @@ describe("SessionService", () => {
     const pending = service.prompt("slow");
     expect(service.describe().status).toBe("streaming");
     await pending;
+    expect(service.describe().status).toBe("idle");
+  });
+
+  it("startPrompt() accepts the prompt and keeps running in the background", async () => {
+    mockSdk.promptDelay = 20;
+    await service.startPrompt("background");
+    expect(service.describe().status).toBe("streaming");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(service.getMessages().map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(service.describe().status).toBe("idle");
   });
 

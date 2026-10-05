@@ -92,8 +92,9 @@ export class SessionHttpHandler {
     return this.controller.getMessages(targetOf(request));
   }
 
-  prompt(request: WithBody & WithQuery) {
-    return this.controller.prompt(targetedBodyOf(request));
+  async prompt(request: WithBody & WithQuery & WithStatus) {
+    request.set.status = 202;
+    return this.controller.startPrompt(targetedBodyOf(request));
   }
 
   followUp(request: WithBody & WithQuery) {

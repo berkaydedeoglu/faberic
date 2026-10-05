@@ -13,7 +13,8 @@ import {
 import { SessionController } from "../../src/controllers/session.controller.ts";
 import { SessionManagerService } from "../../src/services/session/session-manager.service.ts";
 import { SessionService } from "../../src/services/session/session.service.ts";
-import type { PiSessionHandle, SessionSdk } from "../../src/utils/clients/pi/client.ts";
+import type { PiSessionHandle, PromptRun, SessionSdk } from "../../src/utils/clients/pi/client.ts";
+import { createTestLogger } from "./logger.mock.ts";
 import { MissingCredentialsError, SessionNotFoundError } from "../../src/utils/errors/session.errors.ts";
 
 interface MockSession {
@@ -206,6 +207,14 @@ export class MockSessionSdk implements SessionSdk {
     await this.prompt(handle, text);
   }
 
+  async startPrompt(handle: PiSessionHandle, text: string): Promise<PromptRun> {
+    const session = this.resolve(handle);
+    if (!this.credentialedProviders.has(session.model.provider)) {
+      throw new MissingCredentialsError(session.model.provider);
+    }
+    return { done: this.prompt(handle, text) };
+  }
+
   getMessages(handle: PiSessionHandle): SessionMessage[] {
     return [...this.resolve(handle).messages];
   }
@@ -220,7 +229,7 @@ export function createMockedSessionStack<O extends EventObserver = RecordingObse
   observer: O = new RecordingObserver() as EventObserver as O,
 ) {
   const manager = new SessionManagerService(sdk, observer);
-  const service = new SessionService(sdk, manager);
+  const service = new SessionService(sdk, manager, createTestLogger().logger);
   const controller = new SessionController(manager, service);
   return { sdk, observer, manager, service, controller };
 }

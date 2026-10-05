@@ -151,7 +151,7 @@ environment has `base_url` and `session_id`; an empty `session_id` targets the d
 | PUT    | `/session/thinking-level` | Set the thinking level (`thinkingLevel`)                               |
 | GET    | `/session/stats`          | Get session stats                                                      |
 | GET    | `/session/messages`       | Get the conversation                                                   |
-| POST   | `/session/prompt`         | Send a prompt (`text`); returns `messages` and `stats`                 |
+| POST   | `/session/prompt`         | Send a prompt (`text`); returns 202 with the session descriptor, run continues in the background |
 | POST   | `/session/follow-up`      | Send a follow-up (`text`); returns `messages` and `stats`              |
 | POST   | `/environment/clone`      | Clone several repositories (`repositories: [{ url, directory, depth }]`) — 201, or 207 if any failed |
 | POST   | `/environment/agent-md`   | Write `AGENTS.md` (`content`) — returns 201 and `path`                 |
@@ -175,11 +175,17 @@ Example:
 ```bash
 curl -X POST localhost:6565/session -H 'content-type: application/json' \
   -d '{"provider":"anthropic","model":"claude-sonnet-4-5"}'
-curl -X POST localhost:6565/session/prompt -H 'content-type: application/json' \
+# Accepted immediately; poll /session/messages (or /session for status) while it runs.
+curl -i -X POST localhost:6565/session/prompt -H 'content-type: application/json' \
   -d '{"text":"Summarize the README"}'
 curl -X POST 'localhost:6565/session/prompt?sessionId=<id>' -H 'content-type: application/json' \
   -d '{"text":"Summarize the README"}'
 ```
+
+`POST /session/prompt` does not run the agent to completion: it accepts the message, answers
+`202 Accepted` with the session descriptor, and the run continues in the background. Watch it with
+`GET /session` (`status` is `streaming` or `idle`) and `GET /session/messages`; run failures are
+logged. The blocking behaviour lives in the CLI (`session prompt`), which waits and prints the reply.
 
 ### Errors
 

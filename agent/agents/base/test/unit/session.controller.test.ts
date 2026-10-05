@@ -112,6 +112,14 @@ describe("SessionController", () => {
       expect(controller.getMessages()).toHaveLength(4);
     });
 
+    it("accepts a prompt without waiting and returns the session descriptor", async () => {
+      sdk.promptDelay = 20;
+      const session = await controller.startPrompt({ text: "go" });
+      expect(session.status).toBe("streaming");
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(controller.getMessages().map((m) => m.text)).toEqual(["go", "echo: go"]);
+    });
+
     it("aborts without dropping the session, destroys it completely", async () => {
       const aborted = await controller.abortSession();
       expect(controller.getSession().id).toBe(aborted.id);

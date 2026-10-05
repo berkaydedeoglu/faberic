@@ -28,6 +28,12 @@ export interface PiSessionHandle {
   readonly createdAt: number;
 }
 
+/** A prompt run that keeps going after it was accepted. */
+export interface PromptRun {
+  /** Settles when the run, including all tool turns, finishes. Rejects when the run fails. */
+  readonly done: Promise<void>;
+}
+
 export interface SessionSdk {
   preflight(): Promise<string[]>;
   createSession(options: CreateSessionOptions): Promise<PiSessionHandle>;
@@ -49,6 +55,7 @@ export interface SessionSdk {
 
   prompt(handle: PiSessionHandle, text: string): Promise<void>;
   followUp(handle: PiSessionHandle, text: string): Promise<void>;
+  startPrompt(handle: PiSessionHandle, text: string): Promise<PromptRun>;
 
   getMessages(handle: PiSessionHandle): SessionMessage[];
   isStreaming(handle: PiSessionHandle): boolean;
@@ -294,6 +301,16 @@ export class PiSessionClient implements SessionSdk {
     const session = this.resolve(handle);
     await this.requireCredentials(session.model?.provider);
     await session.followUp(text);
+  }
+
+  /** Checks credentials, then lets the prompt run in the background. */
+  async startPrompt(handle: PiSessionHandle, text: string): Promise<PromptRun> {
+    const session = this.resolve(handle);
+    await this.requireCredentials(session.model?.provider);
+    const done = session.prompt(text);
+    // The caller observes `done`; keep a rejection from being reported as unhandled until then.
+    done.catch(() => {});
+    return { done };
   }
 
   getMessages(handle: PiSessionHandle): SessionMessage[] {

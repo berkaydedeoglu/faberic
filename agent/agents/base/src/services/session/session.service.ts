@@ -1,5 +1,6 @@
 import { inject, singleton } from "tsyringe";
 import type {
+  Logger,
   ModelInfo,
   SessionDescriptor,
   SessionMessage,
@@ -8,6 +9,7 @@ import type {
   ThinkingLevel,
 } from "../../models/index.ts";
 import { type PiSessionHandle, PiSessionClient, type SessionSdk } from "../../utils/clients/pi/client.ts";
+import { LoggerService } from "../log/logger.service.ts";
 import { SessionManagerService } from "./session-manager.service.ts";
 
 /** Operations on an open session. Every `sessionId` is optional; without it the default session is used. */
@@ -16,6 +18,7 @@ export class SessionService {
   constructor(
     @inject(PiSessionClient) private readonly sdk: SessionSdk,
     @inject(SessionManagerService) private readonly sessionManager: SessionManagerService,
+    @inject(LoggerService) private readonly logger: Logger,
   ) {}
 
   private session(sessionId?: string): PiSessionHandle {
@@ -28,6 +31,13 @@ export class SessionService {
 
   async followUp(text: string, sessionId?: string): Promise<void> {
     await this.sdk.followUp(this.session(sessionId), text);
+  }
+
+  /** Accepts the prompt and returns once it is running; the run finishes in the background. */
+  async startPrompt(text: string, sessionId?: string): Promise<void> {
+    const handle = this.session(sessionId);
+    const run = await this.sdk.startPrompt(handle, text);
+    run.done.catch((error: unknown) => this.logger.error(`prompt run failed (session ${handle.id})`, error));
   }
 
   getModel(sessionId?: string): ModelInfo | undefined {

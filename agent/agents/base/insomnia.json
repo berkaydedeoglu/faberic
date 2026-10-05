@@ -471,7 +471,7 @@
       "_type": "request",
       "parentId": "fld_session",
       "name": "Prompt",
-      "description": "Send a prompt; returns messages and stats",
+      "description": "Send a prompt; 202 Accepted, runs in the background. Poll Messages for the result.",
       "method": "POST",
       "url": "{{ _.base_url }}/session/prompt",
       "parameters": [

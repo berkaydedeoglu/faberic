@@ -70,9 +70,9 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
     expect(created.status).toBe(201);
 
     const prompted = await app.handle(request("POST", "/session/prompt", { text: "hello" }));
-    const promptResult = (await prompted.json()) as { messages: unknown[]; stats: { totalMessages: number } };
-    expect(promptResult.messages).toHaveLength(2);
-    expect(promptResult.stats.totalMessages).toBe(2);
+    expect(prompted.status).toBe(202);
+    expect((await prompted.json()) as { id: string }).toMatchObject({ id: expect.any(String) });
+    expect((await (await app.handle(request("GET", "/session/messages"))).json()) as unknown[]).toHaveLength(2);
 
     const followed = await app.handle(request("POST", "/session/follow-up", { text: "more" }));
     expect(((await followed.json()) as { messages: unknown[] }).messages).toHaveLength(4);
@@ -135,7 +135,7 @@ describe("HTTP API (router -> handler -> controller -> services, mocked SDK)", (
     const second = (await (await app.handle(request("POST", "/session", {}))).json()) as { id: string };
 
     const prompted = await app.handle(request("POST", `/session/prompt?sessionId=${second.id}`, { text: "hi" }));
-    expect(((await prompted.json()) as { stats: { sessionId: string } }).stats.sessionId).toBe(second.id);
+    expect(((await prompted.json()) as { id: string }).id).toBe(second.id);
     expect(await (await app.handle(request("GET", "/session/messages"))).json()).toEqual([]);
 
     const changed = await app.handle(request("PUT", "/session/default", { sessionId: second.id }));

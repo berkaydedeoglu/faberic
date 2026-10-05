@@ -139,6 +139,14 @@ export class SessionController {
     return this.promptResult(sessionId);
   }
 
+  /** Accepts the prompt without waiting for the run; the caller gets the session descriptor back. */
+  async startPrompt(input: PromptInput): Promise<SessionDescriptor> {
+    const text = requireString(input.text, "text");
+    const sessionId = this.sessionManager.getSession(target(input)).id;
+    await this.sessionService.startPrompt(text, sessionId);
+    return this.sessionService.describe(sessionId);
+  }
+
   async followUp(input: PromptInput): Promise<PromptResult> {
     const text = requireString(input.text, "text");
     const sessionId = this.sessionManager.getSession(target(input)).id;
