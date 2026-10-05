@@ -16,3 +16,7 @@ export interface InjectSkillInput {
   name?: unknown;
   content?: unknown;
 }
+
+export interface LoadArtifactInput {
+  path?: unknown;
+}

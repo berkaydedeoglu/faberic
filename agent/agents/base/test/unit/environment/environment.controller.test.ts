@@ -81,4 +81,33 @@ describe("EnvironmentController", () => {
     }
     expect((await controller.injectSkill({ name: "a".repeat(64), content: "x" })).path).toContain("a".repeat(64));
   });
+
+  it("loads AGENTS.md, SYSTEM.md, and a skill from the artifacts repository by path", async () => {
+    expect(await controller.loadAgentMd({ path: "docs/AGENTS.md" })).toEqual({ path: join(workspace, "AGENTS.md") });
+    expect(await controller.loadSystemMd({ path: "prompts/SYSTEM.md" })).toEqual({
+      path: join(workspace, ".pi", "SYSTEM.md"),
+    });
+    expect(await controller.loadSkill({ path: "skills/lint/SKILL.md" })).toEqual({
+      path: join(workspace, ".pi", "skills", "lint", "SKILL.md"),
+    });
+  });
+
+  it("rejects load input that is missing or escapes the repository", async () => {
+    const invalid = [
+      controller.loadAgentMd({}),
+      controller.loadAgentMd({ path: "" }),
+      controller.loadAgentMd({ path: "/etc/passwd" }),
+      controller.loadAgentMd({ path: "../secret.md" }),
+      controller.loadAgentMd({ path: "docs/../secret.md" }),
+      controller.loadAgentMd({ path: "docs//AGENTS.md" }),
+      controller.loadAgentMd({ path: "docs\\AGENTS.md" }),
+      controller.loadSystemMd({ path: 42 }),
+      controller.loadSkill({ path: "skills/Lint/SKILL.md" }),
+    ];
+    for (const call of invalid) {
+      await expect(call).rejects.toThrow(ValidationError);
+    }
+    expect(git.sparseClones).toEqual([]);
+    expect(observer.events).toEqual([]);
+  });
 });

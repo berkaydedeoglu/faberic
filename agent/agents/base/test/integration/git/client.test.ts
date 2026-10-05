@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { GitClient, isHttpUrl, repositoryName } from "../../../src/utils/clients/git/client.ts";
 import { GitCommandError } from "../../../src/utils/errors/environment.errors.ts";
 
@@ -13,6 +13,7 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
 }
 
 async function commit(repo: string, file: string, content: string): Promise<void> {
+  await mkdir(dirname(join(repo, file)), { recursive: true });
   await writeFile(join(repo, file), content);
   await git(repo, "add", file);
   await git(repo, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", file);
@@ -57,6 +58,54 @@ describe("GitClient against the real git binary (local repositories only)", () =
     await new GitClient().clone(source, destination);
     expect(await readFile(join(destination, "README.md"), "utf8")).toBe("hello");
     expect(await git(destination, "rev-list", "--count", "HEAD")).toBe("2");
+  });
+
+  it("sparse-clones only the requested file of the latest commit", async () => {
+    const destination = join(dir, "sparse");
+    await new GitClient().sparseClone(`file://${source}`, destination, ["README.md"]);
+    expect(await readFile(join(destination, "README.md"), "utf8")).toBe("hello");
+    expect(await Bun.file(join(destination, "CHANGELOG.md")).exists()).toBe(false);
+    expect(await git(destination, "rev-list", "--count", "HEAD")).toBe("1");
+  });
+
+  it("sparse-checks out a nested file, leaving its siblings behind", async () => {
+    await commit(source, "skills/lint/SKILL.md", "lint skill");
+    await commit(source, "skills/other/SKILL.md", "other skill");
+    const destination = join(dir, "nested");
+    await new GitClient().sparseClone(`file://${source}`, destination, ["skills/lint/SKILL.md"]);
+    expect(await readFile(join(destination, "skills", "lint", "SKILL.md"), "utf8")).toBe("lint skill");
+    expect(await Bun.file(join(destination, "skills", "other", "SKILL.md")).exists()).toBe(false);
+  });
+
+  it("sparse-clones with the token as basic auth and does not store it", async () => {
+    const headers: (string | null)[] = [];
+    const server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(request) {
+        headers.push(request.headers.get("authorization"));
+        return new Response("no", { status: 403 });
+      },
+    });
+    try {
+      const url = `http://127.0.0.1:${server.port}/org/private.git`;
+      await expect(new GitClient().sparseClone(url, join(dir, "private"), ["README.md"], { token: "gho_secret" })).rejects.toThrow(
+        GitCommandError,
+      );
+      expect(headers.length).toBeGreaterThan(0);
+      expect(headers[0]).toBe(`Basic ${btoa("x-access-token:gho_secret")}`);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("fails a sparse clone with git's exit code and message", async () => {
+    const error = await new GitClient()
+      .sparseClone(join(dir, "missing"), join(dir, "sparse-missing"), ["README.md"])
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(GitCommandError);
+    expect((error as GitCommandError).command).toBe("clone");
+    expect((error as GitCommandError).stderr).toContain("missing");
   });
 
   it("downloads only the given number of commits when a depth is given", async () => {

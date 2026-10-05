@@ -27,6 +27,8 @@ export interface AppConfig {
   };
   readonly environment: {
     readonly cloneConcurrency: number;
+    /** Git repository the artifact downloads pull single files from; unset = downloads refused. */
+    readonly artifactsRepository: string | undefined;
   };
   readonly logging: {
     readonly consoleLevel: LogLevel;

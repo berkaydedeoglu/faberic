@@ -32,6 +32,26 @@ describe("EnvironmentHttpHandler", () => {
     const skill: { status?: number | string } = {};
     await handler.injectSkill({ body: { name: "lint", content: "x" }, set: skill });
     expect(skill.status).toBe(201);
+
+    const loads: { run: (set: { status?: number | string }) => Promise<unknown>; path: string }[] = [
+      {
+        run: (set) => handler.loadAgentMd({ body: { path: "docs/AGENTS.md" }, set }),
+        path: join(workspace, "AGENTS.md"),
+      },
+      {
+        run: (set) => handler.loadSystemMd({ body: { path: "prompts/SYSTEM.md" }, set }),
+        path: join(workspace, ".pi", "SYSTEM.md"),
+      },
+      {
+        run: (set) => handler.loadSkill({ body: { path: "skills/lint/SKILL.md" }, set }),
+        path: join(workspace, ".pi", "skills", "lint", "SKILL.md"),
+      },
+    ];
+    for (const load of loads) {
+      const set: { status?: number | string } = {};
+      expect(await load.run(set)).toEqual({ path: load.path });
+      expect(set.status).toBe(201);
+    }
   });
 
   it("sets 207 on a clone when some repositories fail", async () => {
@@ -50,6 +70,9 @@ describe("EnvironmentHttpHandler", () => {
     await expect(handler.clone({ body: undefined, set })).rejects.toThrow(ValidationError);
     await expect(handler.createAgentMd({ body: "text", set })).rejects.toThrow(ValidationError);
     await expect(handler.injectSkill({ body: null, set })).rejects.toThrow(ValidationError);
+    await expect(handler.loadAgentMd({ body: {}, set })).rejects.toThrow(ValidationError);
+    await expect(handler.loadSystemMd({ body: {}, set })).rejects.toThrow(ValidationError);
+    await expect(handler.loadSkill({ body: {}, set })).rejects.toThrow(ValidationError);
     expect(set.status).toBeUndefined();
   });
 });

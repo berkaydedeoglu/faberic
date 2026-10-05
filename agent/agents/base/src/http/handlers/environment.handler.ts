@@ -35,4 +35,22 @@ export class EnvironmentHttpHandler {
     request.set.status = 201;
     return result;
   }
+
+  async loadAgentMd(request: WithBody & WithStatus) {
+    const result = await this.controller.loadAgentMd(bodyOf(request));
+    request.set.status = 201;
+    return result;
+  }
+
+  async loadSystemMd(request: WithBody & WithStatus) {
+    const result = await this.controller.loadSystemMd(bodyOf(request));
+    request.set.status = 201;
+    return result;
+  }
+
+  async loadSkill(request: WithBody & WithStatus) {
+    const result = await this.controller.loadSkill(bodyOf(request));
+    request.set.status = 201;
+    return result;
+  }
 }

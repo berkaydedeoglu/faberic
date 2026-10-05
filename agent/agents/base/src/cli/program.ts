@@ -157,6 +157,21 @@ export function createProgram({ session, environment, monitoring, serve, default
     .action((words: string[], options: ContentOptions) => print(environment.createAgentMd(words, options)));
   withContent(environmentCommand.command("inject-skill").description("write .pi/skills/<name>/SKILL.md in the workspace").argument("<name>"))
     .action((name: string, words: string[], options: ContentOptions) => print(environment.injectSkill(name, words, options)));
+  environmentCommand
+    .command("load-agent-md")
+    .description("download AGENTS.md from the artifacts repository (ARTIFACTS_REPOSITORY_URL)")
+    .argument("<path>", "repository-relative path of the file")
+    .action((path: string) => print(environment.loadAgentMd(path)));
+  environmentCommand
+    .command("load-system-md")
+    .description("download .pi/SYSTEM.md from the artifacts repository (ARTIFACTS_REPOSITORY_URL)")
+    .argument("<path>", "repository-relative path of the file")
+    .action((path: string) => print(environment.loadSystemMd(path)));
+  environmentCommand
+    .command("load-skill")
+    .description("download a skill from the artifacts repository into .pi/skills/<name>/SKILL.md")
+    .argument("<path>", "repository-relative path, e.g. skills/<name>/SKILL.md")
+    .action((path: string) => print(environment.loadSkill(path)));
 
   const monitoringCommand = program.command("monitoring").description("inspect the runtime state of this process");
 

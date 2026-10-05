@@ -81,6 +81,48 @@ describe("HTTP API /environment (router -> handler -> controller -> service, moc
     expect(await res.json()).toEqual({ path: join(workspace, ".pi", "skills", "lint", "SKILL.md") });
   });
 
+  it("POST /environment/load-agent-md downloads AGENTS.md from the artifacts repository", async () => {
+    const res = await app.handle(request("POST", "/environment/load-agent-md", { path: "docs/AGENTS.md" }));
+    expect(res.status).toBe(201);
+    const { path } = (await res.json()) as { path: string };
+    expect(path).toBe(join(workspace, "AGENTS.md"));
+    expect(await readFile(path, "utf8")).toBe("content-of-docs/AGENTS.md");
+    expect(git.sparseClones[0]!.paths).toEqual(["docs/AGENTS.md"]);
+    expect(observer.events.map((event) => event.type)).toEqual(["agent_md_load_start", "agent_md_load_end"]);
+  });
+
+  it("POST /environment/load-system-md downloads SYSTEM.md to .pi/SYSTEM.md", async () => {
+    const res = await app.handle(request("POST", "/environment/load-system-md", { path: "prompts/SYSTEM.md" }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ path: join(workspace, ".pi", "SYSTEM.md") });
+  });
+
+  it("POST /environment/load-skill derives the skill name from the path", async () => {
+    const res = await app.handle(request("POST", "/environment/load-skill", { path: "skills/lint/SKILL.md" }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ path: join(workspace, ".pi", "skills", "lint", "SKILL.md") });
+  });
+
+  it("answers 404 when the file is not in the artifacts repository and 503 when it is not configured", async () => {
+    git.missingPaths.add("docs/AGENTS.md");
+    const missing = await app.handle(request("POST", "/environment/load-agent-md", { path: "docs/AGENTS.md" }));
+    expect(missing.status).toBe(404);
+    expect(((await missing.json()) as { error: string }).error).toBe("ArtifactNotFoundError");
+
+    const unconfigured = createMockedEnvironmentStack(undefined, { artifactsRepository: "" });
+    const unconfiguredApp = createApp(
+      {
+        session: new SessionHttpHandler(createMockedSessionStack().controller),
+        environment: new EnvironmentHttpHandler(unconfigured.controller),
+        monitoring: new MonitoringHttpHandler(createMockedMonitoringStack().controller),
+      },
+      createTestLogger().logger,
+    );
+    const res = await unconfiguredApp.handle(request("POST", "/environment/load-agent-md", { path: "docs/AGENTS.md" }));
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: string }).error).toBe("ArtifactsRepositoryNotConfiguredError");
+  });
+
   it("returns 400 for invalid input, including directories outside the workspace", async () => {
     const cases: [string, unknown][] = [
       ["/environment/clone", {}],
@@ -89,6 +131,10 @@ describe("HTTP API /environment (router -> handler -> controller -> service, moc
       ["/environment/clone", { repositories: [{ url: "https://example.com/app", directory: "../escape" }] }],
       ["/environment/agent-md", { content: "" }],
       ["/environment/skills", { name: "Bad Name", content: "x" }],
+      ["/environment/load-agent-md", {}],
+      ["/environment/load-agent-md", { path: "../escape.md" }],
+      ["/environment/load-system-md", { path: "" }],
+      ["/environment/load-skill", { path: "skills/Lint/SKILL.md" }],
     ];
     for (const [path, body] of cases) {
       const res = await app.handle(request("POST", path, body));

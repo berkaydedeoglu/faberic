@@ -8,8 +8,18 @@ export interface CloneOptions {
   readonly token?: string;
 }
 
+export interface SparseCloneOptions {
+  /** Sent as HTTP basic auth to the repository's host only; ignored for non-HTTP(S) URLs. */
+  readonly token?: string;
+}
+
 export interface Git {
   clone(url: string, destination: string, options?: CloneOptions): Promise<void>;
+  /**
+   * Checks out only `paths` (repository-relative) of the latest commit into `destination`,
+   * fetching blobs on demand when the server supports it. Nothing else lands on disk.
+   */
+  sparseClone(url: string, destination: string, paths: string[], options?: SparseCloneOptions): Promise<void>;
 }
 
 /** The folder name `git clone` picks for a URL: its last path segment without `.git`. */
@@ -41,11 +51,26 @@ export class GitClient implements Git {
     await this.run(["clone", ...shallow, "--", url, destination], auth);
   }
 
-  private async run(args: string[], env: Record<string, string>): Promise<void> {
+  async sparseClone(
+    url: string,
+    destination: string,
+    paths: string[],
+    { token }: SparseCloneOptions = {},
+  ): Promise<void> {
+    const auth = token !== undefined && isHttpUrl(url) ? authConfig(url, token) : {};
+    // Leading slashes anchor the non-cone patterns to the repository root, so a file is matched exactly.
+    const patterns = paths.map((path) => `/${path.replace(/^\/+/, "")}`);
+    await this.run(["clone", "--depth", "1", "--filter=blob:none", "--sparse", "--", url, destination], auth);
+    // The on-demand blob fetch below reuses the same auth; it never shows up in .git/config either.
+    await this.run(["sparse-checkout", "set", "--no-cone", ...patterns], auth, destination);
+  }
+
+  private async run(args: string[], env: Record<string, string>, cwd?: string): Promise<void> {
     const proc = Bun.spawn(["git", ...args], {
       stdin: "ignore",
       stdout: "ignore",
       stderr: "pipe",
+      cwd,
       // Fail instead of waiting on a credential prompt nobody can answer.
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...env },
     });

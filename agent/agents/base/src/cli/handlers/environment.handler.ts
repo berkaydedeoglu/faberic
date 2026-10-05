@@ -38,4 +38,16 @@ export class EnvironmentCliHandler {
   async injectSkill(name: string, words: string[], { file }: ContentOptions): Promise<string> {
     return toJson(await this.controller.injectSkill({ name, content: await contentOf(words, file) }));
   }
+
+  async loadAgentMd(path: string): Promise<string> {
+    return toJson(await this.controller.loadAgentMd({ path }));
+  }
+
+  async loadSystemMd(path: string): Promise<string> {
+    return toJson(await this.controller.loadSystemMd({ path }));
+  }
+
+  async loadSkill(path: string): Promise<string> {
+    return toJson(await this.controller.loadSkill({ path }));
+  }
 }

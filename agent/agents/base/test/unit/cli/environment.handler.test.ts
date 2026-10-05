@@ -65,4 +65,22 @@ describe("EnvironmentCliHandler", () => {
   it("fails when --file does not exist", async () => {
     await expect(handler.injectSkill("lint", [], { file: join(workspace, "missing.md") })).rejects.toThrow("ENOENT");
   });
+
+  it("loads AGENTS.md, SYSTEM.md, and a skill from the artifacts repository and prints the paths", async () => {
+    const agentMd = JSON.parse(await handler.loadAgentMd("docs/AGENTS.md"));
+    expect(agentMd).toEqual({ path: join(workspace, "AGENTS.md") });
+    expect(await readFile(agentMd.path, "utf8")).toBe("content-of-docs/AGENTS.md");
+
+    const systemMd = JSON.parse(await handler.loadSystemMd("prompts/SYSTEM.md"));
+    expect(systemMd).toEqual({ path: join(workspace, ".pi", "SYSTEM.md") });
+
+    const skill = JSON.parse(await handler.loadSkill("skills/lint/SKILL.md"));
+    expect(skill).toEqual({ path: join(workspace, ".pi", "skills", "lint", "SKILL.md") });
+    expect(git.sparseClones.map((clone) => clone.paths)).toEqual([["docs/AGENTS.md"], ["prompts/SYSTEM.md"], ["skills/lint/SKILL.md"]]);
+  });
+
+  it("fails the load when the file is missing in the artifacts repository", async () => {
+    git.missingPaths.add("docs/AGENTS.md");
+    await expect(handler.loadAgentMd("docs/AGENTS.md")).rejects.toThrow('No file "docs/AGENTS.md"');
+  });
 });

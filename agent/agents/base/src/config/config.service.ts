@@ -45,6 +45,7 @@ export class ConfigService {
       },
       environment: {
         cloneConcurrency: 3,
+        artifactsRepository: readOptionalString(env, "ARTIFACTS_REPOSITORY_URL"),
       },
       logging: {
         consoleLevel: readEnum(env, "LOG_CONSOLE_LEVEL", LOG_LEVELS, "info"),

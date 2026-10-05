@@ -46,7 +46,14 @@ describe("ConfigService.load", () => {
   });
 
   it("clones three repositories at a time", () => {
-    expect(ConfigService.load({}).environment).toEqual({ cloneConcurrency: 3 });
+    expect(ConfigService.load({}).environment).toEqual({ cloneConcurrency: 3, artifactsRepository: undefined });
+  });
+
+  it("reads the artifacts repository from env and leaves it unset otherwise", () => {
+    expect(ConfigService.load({ ARTIFACTS_REPOSITORY_URL: "https://github.com/org/artifacts.git" }).environment.artifactsRepository).toBe(
+      "https://github.com/org/artifacts.git",
+    );
+    expect(ConfigService.load({ ARTIFACTS_REPOSITORY_URL: "" }).environment.artifactsRepository).toBeUndefined();
   });
 
   it("logs info and up to the console and errors to ~/.faberic/logs/agent.log by default", () => {

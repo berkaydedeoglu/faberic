@@ -8,8 +8,10 @@ import type {
   EnvironmentFile,
   EventObserver,
   InjectSkillOptions,
+  LoadArtifactOptions,
   Logger,
 } from "../../models/index.ts";
+import { SKILL_NAME_PATTERN } from "../../models/index.ts";
 import { type Git, GitClient, isHttpUrl, repositoryName } from "../../utils/clients/git/client.ts";
 import { type GitTokenSource, OrchestratorClient } from "../../utils/clients/orchestrator/client.ts";
 import { mapWithConcurrency } from "../../utils/concurrency.ts";
@@ -19,6 +21,24 @@ import { ensureDir, pathExists, writeTextFile } from "../../utils/fs.ts";
 import { resolveInside } from "../../utils/paths.ts";
 import { EventManager } from "../event/event-manager.service.ts";
 import { LoggerService } from "../log/logger.service.ts";
+import { ArtifactDownloadService } from "./artifact-download.service.ts";
+
+/**
+ * The skill a repository path points at: the directory holding a `SKILL.md`, or the file's stem.
+ * Throws when the path cannot name a valid Agent Skills skill (validation happens before any
+ * download, so invalid input still produces no events).
+ */
+export function skillNameOf(repositoryPath: string): string {
+  const segments = repositoryPath.split("/");
+  const file = segments.at(-1)!;
+  const name = file === "SKILL.md" ? (segments.at(-2) ?? "") : file.replace(/\.md$/, "");
+  if (!SKILL_NAME_PATTERN.test(name)) {
+    throw new ValidationError(
+      `Cannot derive a valid skill name from "${repositoryPath}"; use a path like skills/<name>/SKILL.md`,
+    );
+  }
+  return name;
+}
 
 /**
  * Prepares the workspace, the single working directory every session of this agent runs in.
@@ -32,6 +52,7 @@ export class EnvironmentService {
     @inject(EventManager) private readonly observer: EventObserver,
     @inject(ConfigService) private readonly config: ConfigService,
     @inject(LoggerService) private readonly logger: Logger,
+    @inject(ArtifactDownloadService) private readonly artifacts: ArtifactDownloadService,
   ) {}
 
   get workspace(): string {
@@ -84,6 +105,30 @@ export class EnvironmentService {
       await writeTextFile(path, content);
       return { path };
     });
+  }
+
+  // The loaders download a file from the artifacts repository; each one only decides where the
+  // downloaded content lands, so pi finds it where it looks (see createAgentMd/injectSkill above).
+  async loadAgentMd({ path }: LoadArtifactOptions): Promise<EnvironmentFile> {
+    const destination = join(this.workspace, "AGENTS.md");
+    return this.track("agent_md_load", `load AGENTS.md from ${path}`, () =>
+      this.artifacts.download(path, destination),
+    );
+  }
+
+  async loadSystemMd({ path }: LoadArtifactOptions): Promise<EnvironmentFile> {
+    const destination = join(this.workspace, ".pi", "SYSTEM.md");
+    return this.track("system_md_load", `load SYSTEM.md from ${path}`, () =>
+      this.artifacts.download(path, destination),
+    );
+  }
+
+  async loadSkill({ path }: LoadArtifactOptions): Promise<EnvironmentFile> {
+    const name = skillNameOf(path);
+    const destination = join(this.workspace, ".pi", "skills", name, "SKILL.md");
+    return this.track("skill_load", `load skill ${name} from ${path}`, () =>
+      this.artifacts.download(path, destination),
+    );
   }
 
   private async track<T>(type: string, action: string, run: () => Promise<T>): Promise<T> {

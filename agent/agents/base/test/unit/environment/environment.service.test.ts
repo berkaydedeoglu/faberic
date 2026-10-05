@@ -208,4 +208,112 @@ describe("EnvironmentService", () => {
       expect(events().map((event) => event.type)).toEqual(["skill_inject_start", "skill_inject_error"]);
     });
   });
+
+  describe("loadAgentMd", () => {
+    it("downloads the latest AGENTS.md from the artifacts repository into the workspace", async () => {
+      const url = "https://artifacts.example.com/org/artifacts.git";
+      const path = join(workspace, "AGENTS.md");
+      expect(await service.loadAgentMd({ path: "docs/AGENTS.md" })).toEqual({ path });
+      expect(await readFile(path, "utf8")).toBe("content-of-docs/AGENTS.md");
+      expect(tokens.requested).toEqual([url]);
+      expect(git.sparseClones).toEqual([
+        { url, destination: git.sparseClones[0]!.destination, paths: ["docs/AGENTS.md"], options: { token: `token-for-${url}` } },
+      ]);
+      expect(events()).toEqual([
+        { type: "agent_md_load_start", description: "load AGENTS.md from docs/AGENTS.md started" },
+        { type: "agent_md_load_end", description: "load AGENTS.md from docs/AGENTS.md finished" },
+      ]);
+    });
+
+    it("replaces an existing AGENTS.md", async () => {
+      await service.createAgentMd({ content: "old" });
+      const { path } = await service.loadAgentMd({ path: "docs/AGENTS.md" });
+      expect(await readFile(path, "utf8")).toBe("content-of-docs/AGENTS.md");
+    });
+
+    it("reports a missing file and logs the failure", async () => {
+      git.missingPaths.add("docs/AGENTS.md");
+      await expect(service.loadAgentMd({ path: "docs/AGENTS.md" })).rejects.toThrow(
+        'No file "docs/AGENTS.md" in the latest commit of https://artifacts.example.com/org/artifacts.git.',
+      );
+      expect(events().map((event) => event.type)).toEqual(["agent_md_load_start", "agent_md_load_error"]);
+      expect(log.lines).toHaveLength(1);
+      expect(log.lines[0]).toContain("error: load AGENTS.md from docs/AGENTS.md failed");
+    });
+  });
+
+  describe("loadSystemMd", () => {
+    it("downloads the latest SYSTEM.md to .pi/SYSTEM.md, where pi replaces the system prompt", async () => {
+      const path = join(workspace, ".pi", "SYSTEM.md");
+      expect(await service.loadSystemMd({ path: "prompts/SYSTEM.md" })).toEqual({ path });
+      expect(await readFile(path, "utf8")).toBe("content-of-prompts/SYSTEM.md");
+      expect(events()).toEqual([
+        { type: "system_md_load_start", description: "load SYSTEM.md from prompts/SYSTEM.md started" },
+        { type: "system_md_load_end", description: "load SYSTEM.md from prompts/SYSTEM.md finished" },
+      ]);
+    });
+  });
+
+  describe("loadSkill", () => {
+    it("downloads the latest skill to .pi/skills/<name>/SKILL.md, named after its directory", async () => {
+      const path = join(workspace, ".pi", "skills", "lint", "SKILL.md");
+      expect(await service.loadSkill({ path: "skills/lint/SKILL.md" })).toEqual({ path });
+      expect(await readFile(path, "utf8")).toBe("content-of-skills/lint/SKILL.md");
+      expect(git.sparseClones[0]!.paths).toEqual(["skills/lint/SKILL.md"]);
+      expect(events()).toEqual([
+        { type: "skill_load_start", description: "load skill lint from skills/lint/SKILL.md started" },
+        { type: "skill_load_end", description: "load skill lint from skills/lint/SKILL.md finished" },
+      ]);
+    });
+
+    it("names a plain markdown file after its stem", async () => {
+      const { path } = await service.loadSkill({ path: "guides/deploy.md" });
+      expect(path).toBe(join(workspace, ".pi", "skills", "deploy", "SKILL.md"));
+    });
+
+    it("rejects a path that cannot name a valid skill, before any download or event", async () => {
+      for (const path of ["skills/Lint/SKILL.md", "SKILL.md", "guides/Bad_Name.md"]) {
+        await expect(service.loadSkill({ path })).rejects.toThrow(`Cannot derive a valid skill name from "${path}"`);
+      }
+      expect(git.sparseClones).toEqual([]);
+      expect(tokens.requested).toEqual([]);
+      expect(observer.events).toEqual([]);
+    });
+  });
+
+  describe("artifact downloads", () => {
+    it("asks for a token only for HTTP(S) repositories", async () => {
+      const local = createMockedEnvironmentStack(join(workspace, "local"), {
+        artifactsRepository: "/srv/git/artifacts",
+      });
+      const { path } = await local.service.loadAgentMd({ path: "docs/AGENTS.md" });
+      expect(await readFile(path, "utf8")).toBe("content-of-docs/AGENTS.md");
+      expect(local.tokens.requested).toEqual([]);
+      expect(local.git.sparseClones[0]!.options.token).toBeUndefined();
+    });
+
+    it("fails when the artifacts repository is not configured", async () => {
+      const unconfigured = createMockedEnvironmentStack(join(workspace, "unconfigured"), { artifactsRepository: "" });
+      await expect(unconfigured.service.loadAgentMd({ path: "docs/AGENTS.md" })).rejects.toThrow(
+        "Artifacts repository is not configured. Set ARTIFACTS_REPOSITORY_URL.",
+      );
+      expect(unconfigured.git.sparseClones).toEqual([]);
+      expect(unconfigured.tokens.requested).toEqual([]);
+    });
+
+    it("reports a failed download when the repository is unreachable", async () => {
+      git.failing.add("https://artifacts.example.com/org/artifacts.git");
+      await expect(service.loadSkill({ path: "skills/lint/SKILL.md" })).rejects.toThrow(
+        "git clone failed with exit code 128: fatal: repository 'https://artifacts.example.com/org/artifacts.git' not found",
+      );
+      expect(events().map((event) => event.type)).toEqual(["skill_load_start", "skill_load_error"]);
+    });
+
+    it("never includes the token in events", async () => {
+      await service.loadSystemMd({ path: "prompts/SYSTEM.md" });
+      for (const event of observer.events) {
+        expect(event.description).not.toContain("token-for-");
+      }
+    });
+  });
 });

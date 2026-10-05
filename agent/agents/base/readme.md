@@ -111,6 +111,9 @@ Environment commands prepare the workspace (see [Workspace](#workspace)):
 | `environment clone <url> [--directory <dir>] [--depth <n>]`   | `git clone` one repository into the workspace (folder named after the repository by default) |
 | `environment create-agent-md [content...] [--file <path>]`    | Write `AGENTS.md` in the workspace               |
 | `environment inject-skill <name> [content...] [--file <path>]` | Write `.pi/skills/<name>/SKILL.md` in the workspace |
+| `environment load-agent-md <path>`                             | Download `AGENTS.md` from the artifacts repository |
+| `environment load-system-md <path>`                            | Download `.pi/SYSTEM.md` from the artifacts repository |
+| `environment load-skill <path>`                                | Download a skill into `.pi/skills/<name>/SKILL.md` |
 
 Content is either the words after the command or the contents of `--file`, not both.
 
@@ -156,6 +159,9 @@ environment has `base_url` and `session_id`; an empty `session_id` targets the d
 | POST   | `/environment/clone`      | Clone several repositories (`repositories: [{ url, directory, depth }]`) — 201, or 207 if any failed |
 | POST   | `/environment/agent-md`   | Write `AGENTS.md` (`content`) — returns 201 and `path`                 |
 | POST   | `/environment/skills`     | Write a skill (`name`, `content`) — returns 201 and `path`             |
+| POST   | `/environment/load-agent-md` | Download `AGENTS.md` from the artifacts repository (`path`) — returns 201 and the file `path` |
+| POST   | `/environment/load-system-md` | Download `.pi/SYSTEM.md` from the artifacts repository (`path`) — returns 201 and the file `path` |
+| POST   | `/environment/load-skill` | Download a skill from the artifacts repository (`path`) — returns 201 and the file `path` |
 | GET    | `/monitoring/sessions`    | Every open session: its descriptor plus `stats`                        |
 | GET    | `/monitoring/events`      | Event manager counters (see [Monitoring](#monitoring))                 |
 | GET    | `/monitoring/errors`      | `{ file, log }`: the log file and the last 600 characters of its error lines |
@@ -219,6 +225,7 @@ from `agent/agents/base`. Configuration is read through `ConfigService`
 | `PI_DEFAULT_THINKING_LEVEL` | `medium`                       | Thinking level used when none is given               |
 | `ORCHESTRATOR_API_URL`      | —                              | Orchestrator API base URL (`<base>/events`, `<base>/git/token`) |
 | `ORCHESTRATOR_API_TOKEN`    | —                              | Bearer token for the orchestrator API                |
+| `ARTIFACTS_REPOSITORY_URL`  | —                              | Git repository the `environment load-*` operations download single files from; unset = they fail |
 | `LOG_CONSOLE_LEVEL`         | `info`                         | Lowest level written to the console: `debug`, `info`, `warn`, `error` |
 | `LOG_FILE_LEVEL`            | `error`                        | Lowest level written to the log file                 |
 | `LOG_FILE`                  | `~/.faberic/logs/agent.log`    | Log file; created with its directory on the first write, appended to across runs |
@@ -251,6 +258,17 @@ The environment operations fill it:
   where pi discovers project skills. The content has to be a
   complete skill with `name` and `description` frontmatter. Names follow the Agent Skills rules
   (lowercase letters, digits, single hyphens, at most 64 characters). An existing skill is replaced.
+- **load-agent-md**, **load-system-md**, and **load-skill** download one file at the latest commit of
+  `ARTIFACTS_REPOSITORY_URL` (a private git repository) and write it where pi looks for it: `AGENTS.md`
+  at the workspace root, `.pi/SYSTEM.md` as the project system prompt (the trusted project file takes
+  precedence over `<agent-dir>/SYSTEM.md`), or `.pi/skills/<name>/SKILL.md` for a skill. The skill name
+  is derived from the repository path — the directory holding `SKILL.md`, or the file's stem otherwise;
+  a path that cannot name a valid skill is rejected before any download. The download is a depth-1
+  sparse clone into a temporary directory, so only the requested file lands in the workspace; when the
+  server supports it, blob filtering means only the file's content crosses the network. For HTTP(S)
+  repositories the same orchestrator token as `clone` is used; the temporary clone is always removed.
+  A missing file, or a path that is a directory, fails as a `NotFoundError` (404); an unconfigured
+  `ARTIFACTS_REPOSITORY_URL` fails as an `UnavailableError` (503). An existing destination is replaced.
 
 The clone `directory` must stay inside the workspace; anything else is a `ValidationError`.
 
@@ -316,7 +334,8 @@ src/
     session-manager.service.ts    owns the open sessions and the default one
     session.service.ts            pi SDK operations on an open session (default if no id)
   services/environment/
-    environment.service.ts        workspace setup: clone, AGENTS.md, skills; reports events
+    environment.service.ts        workspace setup: clone, AGENTS.md/skill inject, artifact loaders; reports events
+    artifact-download.service.ts  private: latest version of one file from ARTIFACTS_REPOSITORY_URL
   services/event/
     event-manager.service.ts      observer: queues events and sends them in batches; keeps counters
   services/log/
@@ -374,7 +393,8 @@ HTTP request ┘
   `agent_start` (a prompt run began) and `agent_end` (the run, including all tool turns, finished).
   `EnvironmentService` also reports to the manager: each operation sends `<type>_start`, then
   `<type>_end` or `<type>_error` (with the error message), where `<type>` is `repository_clone`,
-  `agent_md_create`, or `skill_inject`. These events have no `sessionId`. Invalid input is rejected
+  `agent_md_create`, `skill_inject`, `agent_md_load`, `system_md_load`, or `skill_load`. These events
+  have no `sessionId`. Invalid input is rejected
   before the start event, so it sends nothing.
   A batch is sent as soon as 50 events are queued, or 10 seconds after the first queued event,
   whichever comes first.

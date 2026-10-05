@@ -51,3 +51,13 @@ export function optionalPositiveInteger(value: unknown, field: string): number |
   }
   return value;
 }
+
+/** A relative file path inside a git repository: forward slashes, no absolute or parent-escaping segments. */
+export function requireRelativePath(value: unknown, field: string): string {
+  const text = requireString(value, field);
+  const segments = text.split("/");
+  if (text.includes("\\") || segments.includes("..") || segments.includes("")) {
+    throw new ValidationError(`"${field}" must be a relative path inside the repository`);
+  }
+  return text;
+}

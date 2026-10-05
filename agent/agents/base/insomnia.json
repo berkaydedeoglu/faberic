@@ -638,6 +638,84 @@
       "modified": 1790430000000
     },
     {
+      "_id": "req_20_load_agent_md",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Load AGENTS.md",
+      "description": "Download AGENTS.md from ARTIFACTS_REPOSITORY_URL into the workspace root; returns 201 and path",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/load-agent-md",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"path\": \"docs/AGENTS.md\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 20.1,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_20_load_system_md",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Load SYSTEM.md",
+      "description": "Download .pi/SYSTEM.md from ARTIFACTS_REPOSITORY_URL; returns 201 and path (the project system prompt, which takes precedence over <agent-dir>/SYSTEM.md)",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/load-system-md",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"path\": \"prompts/SYSTEM.md\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 20.2,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
+      "_id": "req_20_load_skill",
+      "_type": "request",
+      "parentId": "fld_environment",
+      "name": "Load skill",
+      "description": "Download a skill from ARTIFACTS_REPOSITORY_URL into .pi/skills/<name>/SKILL.md (the name comes from the path); returns 201 and path",
+      "method": "POST",
+      "url": "{{ _.base_url }}/environment/load-skill",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"path\": \"skills/my-skill/SKILL.md\"\n}"
+      },
+      "authentication": {},
+      "metaSortKey": 20.3,
+      "settingEncodeUrl": true,
+      "settingFollowRedirects": "global",
+      "created": 1790430000000,
+      "modified": 1790430000000
+    },
+    {
       "_id": "req_21",
       "_type": "request",
       "parentId": "fld_monitoring",

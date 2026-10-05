@@ -20,6 +20,14 @@ export interface InjectSkillOptions {
   readonly content: string;
 }
 
+export interface LoadArtifactOptions {
+  /** Repository-relative path of the file in the artifacts repository. */
+  readonly path: string;
+}
+
+/** Agent Skills names: lowercase letters, digits, and single hyphens, at most 64 characters. */
+export const SKILL_NAME_PATTERN = /^(?=.{1,64}$)[a-z0-9]+(-[a-z0-9]+)*$/;
+
 export interface EnvironmentFile {
   readonly path: string;
 }

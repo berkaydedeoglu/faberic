@@ -1,22 +1,27 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ConfigService } from "../../src/config/config.service.ts";
 import { EnvironmentController } from "../../src/controllers/environment.controller.ts";
+import { ArtifactDownloadService } from "../../src/services/environment/artifact-download.service.ts";
 import { EnvironmentService } from "../../src/services/environment/environment.service.ts";
-import type { CloneOptions, Git } from "../../src/utils/clients/git/client.ts";
+import type { CloneOptions, Git, SparseCloneOptions } from "../../src/utils/clients/git/client.ts";
 import type { GitTokenSource } from "../../src/utils/clients/orchestrator/client.ts";
 import { GitCommandError } from "../../src/utils/errors/environment.errors.ts";
 import { GitTokenMissingError } from "../../src/utils/errors/orchestrator.errors.ts";
+import { ensureDir } from "../../src/utils/fs.ts";
 import { createTestLogger } from "./logger.mock.ts";
 import { RecordingObserver } from "./session-sdk.mock.ts";
 
 /** Behaves like `git clone` without the network: creates the destination with a README naming the URL. */
 export class MockGit implements Git {
   readonly clones: { url: string; destination: string; options: CloneOptions }[] = [];
+  readonly sparseClones: { url: string; destination: string; paths: string[]; options: SparseCloneOptions }[] = [];
   /** URLs whose clone fails, as git would for a missing or inaccessible repository. */
   readonly failing = new Set<string>();
+  /** Repository paths a sparse clone never materializes, as git does for paths missing at the latest commit. */
+  readonly missingPaths = new Set<string>();
   delayMs = 0;
   maxConcurrent = 0;
   private inFlight = 0;
@@ -36,6 +41,19 @@ export class MockGit implements Git {
       this.inFlight--;
     }
   }
+
+  // Materializes only the requested paths, like `git clone --sparse` + `sparse-checkout set`.
+  async sparseClone(url: string, destination: string, paths: string[], options: SparseCloneOptions = {}): Promise<void> {
+    if (this.failing.has(url)) {
+      throw new GitCommandError("clone", 128, `fatal: repository '${url}' not found`);
+    }
+    for (const path of paths) {
+      if (this.missingPaths.has(path)) continue;
+      await ensureDir(dirname(join(destination, path)));
+      await writeFile(join(destination, path), `content-of-${path}`);
+    }
+    this.sparseClones.push({ url, destination, paths, options });
+  }
 }
 
 /** Hands out `token-for-<url>`, like the orchestrator after the OAuth device flow. */
@@ -51,22 +69,33 @@ export class MockGitTokenSource implements GitTokenSource {
   }
 }
 
-export function workspaceConfig(dir: string, cloneConcurrency = 3): ConfigService {
+export function workspaceConfig(dir: string, cloneConcurrency = 3, artifactsRepository?: string): ConfigService {
   const config = ConfigService.load({});
-  return { get: () => ({ ...config, workspace: { dir }, environment: { cloneConcurrency } }) } as ConfigService;
+  return {
+    get: () => ({
+      ...config,
+      workspace: { dir },
+      environment: { cloneConcurrency, artifactsRepository: artifactsRepository || undefined },
+    }),
+  } as ConfigService;
 }
 
 /** The workspace is a fresh path under the temp dir; it is only created once something is written to it. */
 export function createMockedEnvironmentStack(
   workspace = join(tmpdir(), `agent-base-workspace-${randomUUID()}`),
-  { cloneConcurrency = 3 }: { cloneConcurrency?: number } = {},
+  {
+    cloneConcurrency = 3,
+    artifactsRepository = "https://artifacts.example.com/org/artifacts.git",
+  }: { cloneConcurrency?: number; artifactsRepository?: string } = {},
 ) {
   const git = new MockGit();
   const tokens = new MockGitTokenSource();
   const observer = new RecordingObserver();
   const { file: log, logger } = createTestLogger();
-  const service = new EnvironmentService(git, tokens, observer, workspaceConfig(workspace, cloneConcurrency), logger);
+  const config = workspaceConfig(workspace, cloneConcurrency, artifactsRepository);
+  const artifacts = new ArtifactDownloadService(git, tokens, config, logger);
+  const service = new EnvironmentService(git, tokens, observer, config, logger, artifacts);
   const controller = new EnvironmentController(service);
   const cleanup = () => rm(workspace, { recursive: true, force: true });
-  return { workspace, git, tokens, observer, logger, log, service, controller, cleanup };
+  return { workspace, git, tokens, observer, logger, log, service, artifacts, controller, cleanup };
 }

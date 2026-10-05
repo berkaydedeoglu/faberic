@@ -289,6 +289,33 @@ describe("CLI (program -> handler -> controller -> services, mocked SDK)", () =>
       expect(await readFile(path, "utf8")).toBe("---\nname: lint\n---\n");
     });
 
+    it("loads AGENTS.md, SYSTEM.md, and a skill from the artifacts repository", async () => {
+      expect(await run("environment load-agent-md docs/AGENTS.md")).toBe(0);
+      const agentMd = JSON.parse(out.at(-1)!);
+      expect(agentMd.path).toBe(join(environment.workspace, "AGENTS.md"));
+      expect(await readFile(agentMd.path, "utf8")).toBe("content-of-docs/AGENTS.md");
+
+      expect(await run("environment load-system-md prompts/SYSTEM.md")).toBe(0);
+      expect(JSON.parse(out.at(-1)!).path).toBe(join(environment.workspace, ".pi", "SYSTEM.md"));
+
+      expect(await run("environment load-skill skills/lint/SKILL.md")).toBe(0);
+      expect(JSON.parse(out.at(-1)!).path).toBe(join(environment.workspace, ".pi", "skills", "lint", "SKILL.md"));
+      expect(environment.git.sparseClones.map((clone) => clone.paths)).toEqual([
+        ["docs/AGENTS.md"],
+        ["prompts/SYSTEM.md"],
+        ["skills/lint/SKILL.md"],
+      ]);
+    });
+
+    it("prints load errors and returns exit code 1", async () => {
+      expect(await run("environment load-agent-md ../escape.md")).toBe(1);
+      expect(err.at(-1)).toBe('error: "path" must be a relative path inside the repository');
+      expect(await run("environment load-skill skills/Lint/SKILL.md")).toBe(1);
+      expect(err.at(-1)).toContain("Cannot derive a valid skill name");
+      expect(await run("environment load-system-md")).toBe(1);
+      expect(err.at(-1)).toBe("error: missing required argument 'path'");
+    });
+
     it("prints environment errors and returns exit code 1", async () => {
       await run("environment clone https://example.com/app");
       expect(await run("environment clone https://example.com/app")).toBe(1);
@@ -308,6 +335,9 @@ describe("CLI (program -> handler -> controller -> services, mocked SDK)", () =>
       expect(help).toContain("--depth <depth>");
       expect(help).toMatch(/^  environment create-agent-md \[content\.\.\.\]\s/m);
       expect(help).toMatch(/^  environment inject-skill <name> \[content\.\.\.\]\s/m);
+      expect(help).toMatch(/^  environment load-agent-md <path>\s/m);
+      expect(help).toMatch(/^  environment load-system-md <path>\s/m);
+      expect(help).toMatch(/^  environment load-skill <path>\s/m);
       expect(help).toContain("--file <path>");
       expect(help).toContain('Run "environment <command> --help" for details on a single command.');
     });
